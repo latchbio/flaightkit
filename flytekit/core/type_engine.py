@@ -217,17 +217,17 @@ class DataclassTransformer(TypeTransformer[object]):
         Extracts the Literal type definition for a Dataclass and returns a type Struct.
         If possible also extracts the JSONSchema for the dataclass.
         """
-        if not issubclass(t, DataClassJsonMixin):
-            raise AssertionError(
-                f"Dataclass {t} should be decorated with @dataclass_json to be " f"serialized correctly"
-            )
-        schema = None
-        try:
-            schema = JSONSchema().dump(t.schema())
-        except Exception as e:
-            logger.warn("failed to extract schema for object %s, (will run schemaless) error: %s", str(t), e)
+        # if not issubclass(t, DataClassJsonMixin):
+        #     raise AssertionError(
+        #         f"Dataclass {t} should be decorated with @dataclass_json to be " f"serialized correctly"
+        #     )
+        # schema = None
+        # try:
+        #     schema = JSONSchema().dump(t.schema())
+        # except Exception as e:
+        #     logger.warn("failed to extract schema for object %s, (will run schemaless) error: %s", str(t), e)
 
-        return _primitives.Generic.to_flyte_literal_type(metadata=schema)
+        return _primitives.Generic.to_flyte_literal_type(metadata=None)
 
     def to_literal(self, ctx: FlyteContext, python_val: T, python_type: Type[T], expected: LiteralType) -> Literal:
         if not dataclasses.is_dataclass(python_val):
@@ -236,21 +236,15 @@ class DataclassTransformer(TypeTransformer[object]):
                 f"user defined datatypes in Flytekit"
             )
 
-        if expected.record is None:
-            raise AssertionError(f"Expected a type that is not a record: '{expected}'")
+        # if expected.record is None:
+        #     raise AssertionError(f"Expected type is not a record: '{expected}'")
 
         res = {}
         for f in dataclasses.fields(python_type):
-            v = getattr(python_type, f.name)
-            res[f.name] = TypeEngine.to_literal(ctx, v, f.type, expected.record.field_types[f.name])
+            v = getattr(python_val, f.name)
+            res[f.name] = TypeEngine.to_literal(ctx, v, f.type, None)  # expected.record.field_types[f.name]
 
         return Literal(record=Record(res))
-
-        # if not issubclass(type(python_val), DataClassJsonMixin):
-        #     raise AssertionError(
-        #         f"Dataclass {python_type} should be decorated with @dataclass_json to be " f"serialized correctly"
-        #     )
-        # return Literal(scalar=Scalar(generic=_json_format.Parse(python_val.to_json(), _struct.Struct())))
 
     def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
         if not dataclasses.is_dataclass(expected_python_type):
@@ -258,19 +252,15 @@ class DataclassTransformer(TypeTransformer[object]):
                 f"{expected_python_type} is not of type @dataclass, only Dataclasses are supported for "
                 f"user defined datatypes in Flytekit"
             )
-        if not issubclass(expected_python_type, DataClassJsonMixin):
-            raise AssertionError(
-                f"Dataclass {expected_python_type} should be decorated with @dataclass_json to be "
-                f"serialized correctly"
-            )
-        dc = expected_python_type.from_json(_json_format.MessageToJson(lv.scalar.generic))
-        # NOTE: Protobuf Struct does not support explicit int types, int types are upconverted to a double value
-        # https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#google.protobuf.Value
-        # Thus we will have to walk the given dataclass and typecast values to int, where expected.
+
+        if lv.record is None:
+            raise AssertionError(f"Provided literal is not a record: '{lv}'")
+
+        res = {}
         for f in dataclasses.fields(expected_python_type):
-            if f.type == int:
-                dc.__setattr__(f.name, int(dc.__getattribute__(f.name)))
-        return dc
+            res[f.name] = TypeEngine.to_python_value(ctx, lv.record.fields[f.name], f.type)
+
+        return expected_python_type(**res)
 
 
 class ProtobufTransformer(TypeTransformer[_proto_reflection.GeneratedProtocolMessageType]):
