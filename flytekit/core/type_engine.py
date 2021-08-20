@@ -168,45 +168,7 @@ class RestrictedType(TypeTransformer[T], ABC):
 class DataclassTransformer(TypeTransformer[object]):
     """
     The Dataclass Transformer, provides a type transformer for arbitrary Python dataclasses, that have
-    @dataclass and @dataclass_json decorators.
-
-    The Dataclass is converted to and from json and is transported between tasks using the proto.Structpb representation
-    Also the type declaration will try to extract the JSON Schema for the object if possible and pass it with the
-    definition.
-
-    For Json Schema, we use https://github.com/fuhrysteve/marshmallow-jsonschema library.
-
-    Example
-
-    .. code-block:: python
-
-        @dataclass_json
-        @dataclass
-        class Test():
-           a: int
-           b: str
-
-        from marshmallow_jsonschema import JSONSchema
-        t = Test(a=10,b="e")
-        JSONSchema().dump(t.schema())
-
-    Output will look like
-
-    .. code-block:: json
-
-        {'$schema': 'http://json-schema.org/draft-07/schema#',
-         'definitions': {'TestSchema': {'properties': {'a': {'title': 'a',
-             'type': 'number',
-             'format': 'integer'},
-            'b': {'title': 'b', 'type': 'string'}},
-           'type': 'object',
-           'additionalProperties': False}},
-         '$ref': '#/definitions/TestSchema'}
-
-    .. note::
-
-        The schema support is experimental and is useful for auto-completing in the UI/CLI
-
+    @dataclass decorators.
     """
 
     def __init__(self):
@@ -217,17 +179,11 @@ class DataclassTransformer(TypeTransformer[object]):
         Extracts the Literal type definition for a Dataclass and returns a type Struct.
         If possible also extracts the JSONSchema for the dataclass.
         """
-        # if not issubclass(t, DataClassJsonMixin):
-        #     raise AssertionError(
-        #         f"Dataclass {t} should be decorated with @dataclass_json to be " f"serialized correctly"
-        #     )
-        # schema = None
-        # try:
-        #     schema = JSONSchema().dump(t.schema())
-        # except Exception as e:
-        #     logger.warn("failed to extract schema for object %s, (will run schemaless) error: %s", str(t), e)
+        fields = {}
+        for f in dataclasses.fields(t):
+            fields[f.name] = TypeEngine.to_literal_type(f.type)
 
-        return _primitives.Generic.to_flyte_literal_type(metadata=None)
+        return LiteralType(record=_type_models.RecordType(field_types=fields))
 
     def to_literal(self, ctx: FlyteContext, python_val: T, python_type: Type[T], expected: LiteralType) -> Literal:
         if not dataclasses.is_dataclass(python_val):
@@ -236,13 +192,13 @@ class DataclassTransformer(TypeTransformer[object]):
                 f"user defined datatypes in Flytekit"
             )
 
-        # if expected.record is None:
-        #     raise AssertionError(f"Expected type is not a record: '{expected}'")
+        if expected.record is None:
+            raise AssertionError(f"Expected type is not a record: '{expected}'")
 
         res = {}
         for f in dataclasses.fields(python_type):
             v = getattr(python_val, f.name)
-            res[f.name] = TypeEngine.to_literal(ctx, v, f.type, None)  # expected.record.field_types[f.name]
+            res[f.name] = TypeEngine.to_literal(ctx, v, f.type, expected.record.field_types[f.name])
 
         return Literal(record=Record(res))
 
