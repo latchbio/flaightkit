@@ -1,5 +1,5 @@
 from datetime import datetime as _datetime
-from typing import Dict
+from typing import Dict, Optional
 
 import pytz as _pytz
 from flyteidl.core import literals_pb2 as _literals_pb2
@@ -744,7 +744,7 @@ class Record(_common.FlyteIdlEntity):
 
 
 class Literal(_common.FlyteIdlEntity):
-    def __init__(self, scalar: Scalar = None, collection: LiteralCollection = None, map: LiteralMap = None):
+    def __init__(self, scalar: Scalar = None, collection: LiteralCollection = None, map: LiteralMap = None, record: Optional[Record] = None):
         """
         :param Scalar scalar:
         :param LiteralCollection collection:
@@ -753,6 +753,7 @@ class Literal(_common.FlyteIdlEntity):
         self._scalar = scalar
         self._collection = collection
         self._map = map
+        self._record = record
 
     @property
     def scalar(self):
@@ -779,6 +780,10 @@ class Literal(_common.FlyteIdlEntity):
         return self._map
 
     @property
+    def record(self):
+        return self._record
+
+    @property
     def value(self):
         """
         Returns one of the scalar, collection, or map properties based on which one is set.
@@ -794,6 +799,7 @@ class Literal(_common.FlyteIdlEntity):
             scalar=self.scalar.to_flyte_idl() if self.scalar is not None else None,
             collection=self.collection.to_flyte_idl() if self.collection is not None else None,
             map=self.map.to_flyte_idl() if self.map is not None else None,
+            record=self.record.to_flyte_idl() if self.record is not None else None,
         )
 
     @classmethod
@@ -810,4 +816,5 @@ class Literal(_common.FlyteIdlEntity):
             scalar=Scalar.from_flyte_idl(pb2_object.scalar) if pb2_object.HasField("scalar") else None,
             collection=collection,
             map=LiteralMap.from_flyte_idl(pb2_object.map) if pb2_object.HasField("map") else None,
+            record=Record.from_flyte_idl(pb2_object.record) if pb2_object.HasField("record") else None
         )

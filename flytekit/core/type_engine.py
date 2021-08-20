@@ -244,7 +244,7 @@ class DataclassTransformer(TypeTransformer[object]):
             v = getattr(python_type, f.name)
             res[f.name] = TypeEngine.to_literal(ctx, v, f.type, expected.record.field_types[f.name])
 
-        return Record(res)
+        return Literal(record=Record(res))
 
         # if not issubclass(type(python_val), DataClassJsonMixin):
         #     raise AssertionError(
