@@ -1,4 +1,5 @@
 from datetime import datetime as _datetime
+from typing import Dict
 
 import pytz as _pytz
 from flyteidl.core import literals_pb2 as _literals_pb2
@@ -716,6 +717,30 @@ class Scalar(_common.FlyteIdlEntity):
             error=pb2_object.error if pb2_object.HasField("error") else None,
             generic=pb2_object.generic if pb2_object.HasField("generic") else None,
         )
+
+
+class Record(_common.FlyteIdlEntity):
+    def __init__(self, fields: Dict[str, "Literal"]):
+        self._fields = fields
+
+    @property
+    def fields(self):
+        return self._fields
+
+    def to_flyte_idl(self):
+        return _literals_pb2.LiteralRecord(
+            fields=[
+                _literals_pb2.LiteralRecord.LiteralRecordField(name=k, value=v.to_flyte_idl)
+                for k, v in self._fields.items()
+            ]
+        )
+
+    @classmethod
+    def from_flyte_idl(cls, pb2_object):
+        return cls({
+            f.name: Literal.from_flyte_idl(f.value)
+            for f in pb2_object.fields
+        })
 
 
 class Literal(_common.FlyteIdlEntity):

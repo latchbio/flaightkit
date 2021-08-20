@@ -22,11 +22,21 @@ from marshmallow_jsonschema import JSONSchema
 
 from flytekit.common.types import primitives as _primitives
 from flytekit.core.context_manager import FlyteContext
+from flytekit.interfaces import data
 from flytekit.loggers import logger
 from flytekit.models import interface as _interface_models
 from flytekit.models import types as _type_models
 from flytekit.models.core import types as _core_types
-from flytekit.models.literals import Blob, BlobMetadata, Literal, LiteralCollection, LiteralMap, Primitive, Scalar
+from flytekit.models.literals import (
+    Blob,
+    BlobMetadata,
+    Literal,
+    LiteralCollection,
+    LiteralMap,
+    Primitive,
+    Record,
+    Scalar,
+)
 from flytekit.models.types import LiteralType, SimpleType
 
 T = typing.TypeVar("T")
@@ -225,11 +235,22 @@ class DataclassTransformer(TypeTransformer[object]):
                 f"{type(python_val)} is not of type @dataclass, only Dataclasses are supported for "
                 f"user defined datatypes in Flytekit"
             )
-        if not issubclass(type(python_val), DataClassJsonMixin):
-            raise AssertionError(
-                f"Dataclass {python_type} should be decorated with @dataclass_json to be " f"serialized correctly"
-            )
-        return Literal(scalar=Scalar(generic=_json_format.Parse(python_val.to_json(), _struct.Struct())))
+
+        if expected.record is None:
+            raise AssertionError(f"Expected a type that is not a record: '{expected}'")
+
+        res = {}
+        for f in dataclasses.fields(python_type):
+            v = getattr(python_type, f.name)
+            res[f.name] = TypeEngine.to_literal(ctx, v, f.type, expected.record.field_types[f.name])
+
+        return Record(res)
+
+        # if not issubclass(type(python_val), DataClassJsonMixin):
+        #     raise AssertionError(
+        #         f"Dataclass {python_type} should be decorated with @dataclass_json to be " f"serialized correctly"
+        #     )
+        # return Literal(scalar=Scalar(generic=_json_format.Parse(python_val.to_json(), _struct.Struct())))
 
     def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
         if not dataclasses.is_dataclass(expected_python_type):
