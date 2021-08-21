@@ -9,7 +9,9 @@ from flytekit.common.exceptions import user as _user_exceptions
 from flytekit.models import common as _common
 from flytekit.models.core import types as _core_types
 from flytekit.models.types import OutputReference as _OutputReference
+from flytekit.models.types import RecordType as _RecordType
 from flytekit.models.types import SchemaType as _SchemaType
+from flytekit.models.types import SumType as _SumType
 
 
 class RetryStrategy(_common.FlyteIdlEntity):
@@ -139,6 +141,7 @@ class Primitive(_common.FlyteIdlEntity):
         """
         :rtype: flyteidl.core.literals_pb2.Primitive
         """
+        print(self.integer, self.float_value, self.string_value, self.boolean)
         primitive = _literals_pb2.Primitive(
             integer=self.integer,
             float_value=self.float_value,
@@ -719,32 +722,73 @@ class Scalar(_common.FlyteIdlEntity):
         )
 
 
+class Variant(_common.FlyteIdlEntity):
+    def __init__(self, idx: int, value: "Literal", type: _SumType):
+        self._idx = idx
+        self._value = value
+        self._type = type
+
+    @property
+    def idx(self):
+        return self._idx
+
+    @property
+    def value(self):
+        return self._value
+
+    @property
+    def type(self):
+        return self._type
+
+    def to_flyte_idl(self):
+        return _literals_pb2.LiteralVariant(
+            idx=self._idx, value=self.value.to_flyte_idl(), type=self.type.to_flyte_idl()
+        )
+
+    @classmethod
+    def from_flyte_idl(cls, pb2_object):
+        return cls(pb2_object.idx, pb2_object.value, pb2_object.type)
+
+
 class Record(_common.FlyteIdlEntity):
-    def __init__(self, fields: Dict[str, "Literal"]):
+    def __init__(self, fields: Dict[str, "Literal"], type: _RecordType):
         self._fields = fields
+        self._type = type
 
     @property
     def fields(self):
         return self._fields
+
+    @property
+    def type(self):
+        return self._type
 
     def to_flyte_idl(self):
         return _literals_pb2.LiteralRecord(
             fields=[
                 _literals_pb2.LiteralRecord.LiteralRecordField(name=k, value=v.to_flyte_idl)
                 for k, v in self._fields.items()
-            ]
+            ],
+            type=self.type.to_flyte_idl(),
         )
 
     @classmethod
     def from_flyte_idl(cls, pb2_object):
-        return cls({
-            f.name: Literal.from_flyte_idl(f.value)
-            for f in pb2_object.fields
-        })
+        return cls(
+            {f.name: Literal.from_flyte_idl(f.value) for f in pb2_object.fields},
+            _RecordType.from_flyte_idl(pb2_object.type),
+        )
 
 
 class Literal(_common.FlyteIdlEntity):
-    def __init__(self, scalar: Scalar = None, collection: LiteralCollection = None, map: LiteralMap = None, record: Optional[Record] = None):
+    def __init__(
+        self,
+        scalar: Scalar = None,
+        collection: LiteralCollection = None,
+        map: LiteralMap = None,
+        variant: Optional[Variant] = None,
+        record: Optional[Record] = None,
+    ):
         """
         :param Scalar scalar:
         :param LiteralCollection collection:
@@ -753,6 +797,7 @@ class Literal(_common.FlyteIdlEntity):
         self._scalar = scalar
         self._collection = collection
         self._map = map
+        self._variant = variant
         self._record = record
 
     @property
@@ -780,6 +825,10 @@ class Literal(_common.FlyteIdlEntity):
         return self._map
 
     @property
+    def variant(self):
+        return self._variant
+
+    @property
     def record(self):
         return self._record
 
@@ -799,6 +848,7 @@ class Literal(_common.FlyteIdlEntity):
             scalar=self.scalar.to_flyte_idl() if self.scalar is not None else None,
             collection=self.collection.to_flyte_idl() if self.collection is not None else None,
             map=self.map.to_flyte_idl() if self.map is not None else None,
+            variant=self.variant.to_flyte_idl() if self.variant is not None else None,
             record=self.record.to_flyte_idl() if self.record is not None else None,
         )
 
@@ -816,5 +866,6 @@ class Literal(_common.FlyteIdlEntity):
             scalar=Scalar.from_flyte_idl(pb2_object.scalar) if pb2_object.HasField("scalar") else None,
             collection=collection,
             map=LiteralMap.from_flyte_idl(pb2_object.map) if pb2_object.HasField("map") else None,
-            record=Record.from_flyte_idl(pb2_object.record) if pb2_object.HasField("record") else None
+            variant=Variant.from_flyte_idl(pb2_object.variant) if pb2_object.HasField("variant") else None,
+            record=Record.from_flyte_idl(pb2_object.record) if pb2_object.HasField("record") else None,
         )

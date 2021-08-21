@@ -7,18 +7,17 @@ import inspect
 import json as _json
 import mimetypes
 import os
+import traceback
 import typing
 from abc import ABC, abstractmethod
 from typing import Type
 
-from dataclasses_json import DataClassJsonMixin
 from google.protobuf import json_format as _json_format
 from google.protobuf import reflection as _proto_reflection
 from google.protobuf import struct_pb2 as _struct
 from google.protobuf.json_format import MessageToDict as _MessageToDict
 from google.protobuf.json_format import ParseDict as _ParseDict
 from google.protobuf.struct_pb2 import Struct
-from marshmallow_jsonschema import JSONSchema
 
 from flytekit.common.types import primitives as _primitives
 from flytekit.core.context_manager import FlyteContext
@@ -36,6 +35,7 @@ from flytekit.models.literals import (
     Primitive,
     Record,
     Scalar,
+    Variant,
 )
 from flytekit.models.types import LiteralType, SimpleType
 
@@ -200,7 +200,7 @@ class DataclassTransformer(TypeTransformer[object]):
             v = getattr(python_val, f.name)
             res[f.name] = TypeEngine.to_literal(ctx, v, f.type, expected.record.field_types[f.name])
 
-        return Literal(record=Record(res))
+        return Literal(record=Record(res, type=expected.record))
 
     def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
         if not dataclasses.is_dataclass(expected_python_type):
@@ -217,6 +217,53 @@ class DataclassTransformer(TypeTransformer[object]):
             res[f.name] = TypeEngine.to_python_value(ctx, lv.record.fields[f.name], f.type)
 
         return expected_python_type(**res)
+
+
+class UnionTransformer(TypeTransformer[typing.Union[typing.Any]]):
+    def __init__(self):
+        super().__init__("Union-Transformer", typing.Union)
+
+    def get_literal_type(self, t: Type[T]) -> LiteralType:
+        summands = [TypeEngine.to_literal_type(x) for x in t.__args__]
+        return LiteralType(sum=_type_models.SumType(summands=summands))
+
+    def to_literal(self, ctx: FlyteContext, python_val: T, python_type: Type[T], expected: LiteralType) -> Literal:
+        if expected.sum is None:
+            raise AssertionError(f"Expected type is not a sum type: '{expected}'")
+
+        idx = None
+        val = None
+        for i, t in enumerate(python_type.__args__):
+            try:
+                if type(python_val) != t:
+                    continue
+                if TypeEngine.to_literal_type(type(python_val)) != expected.sum.summands[i]:
+                    continue
+
+                val = TypeEngine.to_literal(ctx, python_val, t, expected.sum.summands[i])
+                idx = i
+                break
+            except ValueError as e:
+                if "not supported" not in str(e):
+                    raise e
+                continue
+
+        if val is None or idx is None:
+            raise ValueError(f"Could not find suitable union instantiation: '{python_val}' ('{python_type}')")
+
+        return Literal(variant=Variant(idx=idx, value=val, type=expected.sum))
+
+    def to_python_value_known(self, ctx: FlyteContext, lv: Literal, known_python_type: Type[T]) -> T:
+        if lv.variant is None:
+            raise AssertionError(f"Provided literal is not a variant: '{lv}'")
+
+        return TypeEngine.to_python_value(ctx, lv.variant.value, known_python_type)
+
+    def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
+        if lv.variant is None:
+            raise AssertionError(f"Provided literal is not a variant: '{lv}'")
+
+        self.to_python_value_known(ctx, lv.variant.value, expected_python_type.__args__[lv.variant.idx])
 
 
 class ProtobufTransformer(TypeTransformer[_proto_reflection.GeneratedProtocolMessageType]):
@@ -256,6 +303,7 @@ class TypeEngine(typing.Generic[T]):
 
     _REGISTRY: typing.Dict[type, TypeTransformer[T]] = {}
     _DATACLASS_TRANSFORMER: TypeTransformer = DataclassTransformer()
+    _UNION_TRANSFORMER = UnionTransformer()
 
     @classmethod
     def register(cls, transformer: TypeTransformer):
@@ -345,6 +393,12 @@ class TypeEngine(typing.Generic[T]):
         Converts a Literal value with an expected python type into a python value.
         """
         transformer = cls.get_transformer(expected_python_type)
+
+        if lv.variant is not None and (
+            not hasattr(expected_python_type, "__origin__") or expected_python_type.__origin__ != typing.Union
+        ):
+            return cls._UNION_TRANSFORMER.to_python_value_known(ctx, lv, expected_python_type)
+
         return transformer.to_python_value(ctx, lv, expected_python_type)
 
     @classmethod
@@ -768,6 +822,7 @@ def _register_default_type_transformers():
     TypeEngine.register(BinaryIOTransformer())
     TypeEngine.register(EnumTransformer())
     TypeEngine.register(ProtobufTransformer())
+    TypeEngine.register(UnionTransformer())
 
     # inner type is. Also unsupported are typing's Tuples. Even though you can look inside them, Flyte's type system
     # doesn't support these currently.
