@@ -34,7 +34,6 @@ from flytekit.models.literals import (
     Primitive,
     Record,
     Scalar,
-    Variant,
     Void,
 )
 from flytekit.models.types import LiteralType, SimpleType
@@ -266,12 +265,9 @@ class UnionTransformer(TypeTransformer[typing.Union[typing.Any]]):
         if val is None or typ is None:
             raise ValueError(f"Could not find suitable union instantiation: '{python_val}' ('{python_type}')")
 
-        return Literal(variant=Variant(type=typ, value=val))
+        return val
 
     def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
-        if lv.variant is not None:
-            return TypeEngine.to_python_value(ctx, lv.variant.value, TypeEngine.to_literal_type(lv.variant.type))
-
         for x in expected_python_type.__args__:
             try:
                 res = TypeEngine.to_python_value(ctx, lv, x)
