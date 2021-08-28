@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
+from docstring_parser.common import Docstring
+
 from flytekit.common import constants as _common_constants
 from flytekit.common.exceptions import scopes as exception_scopes
 from flytekit.common.exceptions.user import FlyteValidationException, FlyteValueException
@@ -19,7 +21,7 @@ from flytekit.core.context_manager import (
     FlyteContextManager,
     FlyteEntities,
 )
-from flytekit.core.docstring import Docstring
+from flytekit.core.docstring import parse_docstring
 from flytekit.core.interface import (
     Interface,
     transform_inputs_to_parameters,
@@ -801,7 +803,7 @@ def workflow(
             fn,
             metadata=workflow_metadata,
             default_metadata=workflow_metadata_defaults,
-            docstring=Docstring(callable_=fn),
+            docstring=parse_docstring(fn),
         )
         workflow_instance.compile()
         return workflow_instance
