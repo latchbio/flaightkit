@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 
 from setuptools import find_packages, setup  # noqa
 
@@ -65,7 +65,7 @@ setup(
         ]
     },
     install_requires=[
-        f"flyteidl @ {os.environ['FLYTEIDL_PATH']}",
+        f"flyteidl {os.environ['FLYTEIDL_VERSION']}",  # >=0.19.18,<1.0.0
         "wheel>=0.30.0,<1.0.0",
         "pandas>=1.0.0,<2.0.0",
         "pyarrow>=2.0.0,<4.0.0",
