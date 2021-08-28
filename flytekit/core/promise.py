@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections
+import dataclasses
 import typing
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -15,7 +16,7 @@ from flytekit.core import type_engine
 from flytekit.core.context_manager import BranchEvalMode, ExecutionState, FlyteContext, FlyteContextManager
 from flytekit.core.interface import Interface
 from flytekit.core.node import Node
-from flytekit.core.type_engine import DictTransformer, ListTransformer, TypeEngine
+from flytekit.core.type_engine import DataclassTransformer, DictTransformer, ListTransformer, TypeEngine
 from flytekit.models import interface as _interface_models
 from flytekit.models import literals as _literal_models
 from flytekit.models import literals as _literals_models
@@ -23,6 +24,8 @@ from flytekit.models import types as _type_models
 from flytekit.models import types as type_models
 from flytekit.models.core import workflow as _workflow_model
 from flytekit.models.literals import Primitive
+
+_type = type
 
 
 def translate_inputs_to_literals(
@@ -66,7 +69,17 @@ def translate_inputs_to_literals(
     def extract_value(
         ctx: FlyteContext, input_val: Any, val_type: type, flyte_literal_type: _type_models.LiteralType
     ) -> _literal_models.Literal:
-        if isinstance(input_val, list):
+        if flyte_literal_type.sum is not None:
+            for s in flyte_literal_type.sum.summands:
+                try:
+                    return extract_value(ctx, input_val, val_type, s)
+                except:
+                    continue
+            raise Exception(f"Could not extract value for sum type: '{flyte_literal_type}' from '{input_val}'")
+
+        if input_val is None:
+            return _literal_models.Literal(scalar=_literal_models.Scalar(none_type=_literal_models.Void()))
+        elif isinstance(input_val, list):
             if flyte_literal_type.collection_type is None:
                 raise Exception(f"Not a collection type {flyte_literal_type} but got a list {input_val}")
             try:
@@ -105,6 +118,17 @@ def translate_inputs_to_literals(
                 "actual attribute that you want to use. For example, in NamedTuple('OP', x=int) then"
                 "return v.x, instead of v, even if this has a single element"
             )
+        elif dataclasses.is_dataclass(input_val):
+            if flyte_literal_type.record is None:
+                raise Exception(f"Got a dataclass for a non-record type: '{input_val}' expected '{flyte_literal_type}'")
+
+            res = {}
+            for f in dataclasses.fields(input_val):
+                res[f.name] = extract_value(
+                    ctx, getattr(input_val, f.name), f.type, flyte_literal_type.record.field_types[f.name]
+                )
+
+            return _literal_models.Literal(record=_literal_models.Record(fields=res))
         else:
             # This handles native values, the 5 example
             return TypeEngine.to_literal(ctx, input_val, val_type, flyte_literal_type)
@@ -538,7 +562,7 @@ def create_task_output(
 def binding_data_from_python_std(
     ctx: _flyte_context.FlyteContext,
     expected_literal_type: _type_models.LiteralType,
-    t_value: typing.Any,
+    t_value: Any,
     t_value_type: type,
 ) -> _literals_models.BindingData:
     # This handles the case where the given value is the output of another task
@@ -563,6 +587,14 @@ def binding_data_from_python_std(
         )
 
         return _literals_models.BindingData(collection=collection)
+
+    elif dataclasses.is_dataclass(t_value):
+        fields: Dict[str, _literals_models.BindingData] = {}
+        for f in dataclasses.fields(t_value):
+            type = TypeEngine.to_literal_type(f.type)
+            fields[f.name] = binding_data_from_python_std(ctx, type, getattr(t_value, f.name), f.type)
+
+        return _literal_models.BindingData(record=_literal_models.BindingRecord(fields=fields))
 
     elif isinstance(t_value, dict):
         if (
@@ -592,6 +624,34 @@ def binding_data_from_python_std(
             "actual attribute that you want to use. For example, in NamedTuple('OP', x=int) then"
             "return v.x, instead of v, even if this has a single element"
         )
+
+    if hasattr(t_value_type, "__origin__") and t_value_type.__origin__ == Union:
+        if expected_literal_type.sum is None:
+            raise AssertionError(
+                f"Expected type is not a sum type: '{expected_literal_type}' (python type '{t_value_type}')"
+            )
+
+        for t in t_value_type.__args__:
+            try:
+                typ = None
+                ltyp = TypeEngine.to_literal_type(t)
+                for (
+                    s
+                ) in expected_literal_type.sum.summands:  # todo(maximsmol): O(n^2) algo, not sure if Type is hashable
+                    if ltyp != s:
+                        continue
+                    typ = s
+
+                if typ is None:
+                    continue
+
+                return binding_data_from_python_std(ctx, typ, t_value, t)
+            except ValueError as e:
+                if "not supported" not in str(e):
+                    raise e
+                continue
+
+        raise ValueError(f"Could not find suitable union instantiation: '{t_value}' ('{t_value_type}')")
 
     # This is the scalar case - e.g. my_task(in1=5)
     scalar = TypeEngine.to_literal(ctx, t_value, t_value_type, expected_literal_type).scalar

@@ -1,4 +1,5 @@
 import json as _json
+from typing import Dict, List, Optional
 
 from flyteidl.core import types_pb2 as _types_pb2
 from google.protobuf import json_format as _json_format
@@ -98,6 +99,45 @@ class SchemaType(_common.FlyteIdlEntity):
         return cls(columns=[SchemaType.SchemaColumn.from_flyte_idl(c) for c in proto.columns])
 
 
+class SumType(_common.FlyteIdlEntity):
+    def __init__(self, summands=List["LiteralType"]):
+        self._summands = summands
+
+    @property
+    def summands(self):
+        return self._summands
+
+    def to_flyte_idl(self):
+        return _types_pb2.SumType(summands=[x.to_flyte_idl() for x in self.summands])
+
+    @classmethod
+    def from_flyte_idl(cls, idl_object):
+        return cls([LiteralType.from_flyte_idl(x) for x in idl_object.summands])
+
+
+class RecordType(_common.FlyteIdlEntity):
+    def __init__(self, field_types=Dict[str, "LiteralType"]):
+        self._field_types = field_types
+
+    @property
+    def field_types(self):
+        return self._field_types
+
+    def to_flyte_idl(self):
+        return _types_pb2.RecordType(
+            fields=[
+                _types_pb2.RecordType.RecordField(name=k, type=v.to_flyte_idl()) for k, v in self.field_types.items()
+            ]
+        )
+
+    @classmethod
+    def from_flyte_idl(cls, proto):
+        fields = {}
+        for f in proto.fields:
+            fields[f.name] = LiteralType.from_flyte_idl(f.type)
+        return cls(field_types=fields)
+
+
 class LiteralType(_common.FlyteIdlEntity):
     def __init__(
         self,
@@ -107,6 +147,8 @@ class LiteralType(_common.FlyteIdlEntity):
         map_value_type=None,
         blob=None,
         enum_type=None,
+        sum: Optional[SumType] = None,
+        record: Optional[RecordType] = None,
         metadata=None,
     ):
         """
@@ -126,6 +168,8 @@ class LiteralType(_common.FlyteIdlEntity):
         self._map_value_type = map_value_type
         self._blob = blob
         self._enum_type = enum_type
+        self._sum = sum
+        self._record = record
         self._metadata = metadata
 
     @property
@@ -159,6 +203,14 @@ class LiteralType(_common.FlyteIdlEntity):
         return self._enum_type
 
     @property
+    def sum(self) -> Optional[SumType]:
+        return self._sum
+
+    @property
+    def record(self) -> Optional[RecordType]:
+        return self._record
+
+    @property
     def metadata(self):
         """
         :rtype: dict[Text, T]
@@ -180,6 +232,8 @@ class LiteralType(_common.FlyteIdlEntity):
             map_value_type=self.map_value_type.to_flyte_idl() if self.map_value_type is not None else None,
             blob=self.blob.to_flyte_idl() if self.blob is not None else None,
             enum_type=self.enum_type.to_flyte_idl() if self.enum_type else None,
+            sum=self.sum.to_flyte_idl() if self.sum is not None else None,
+            record=self.record.to_flyte_idl() if self.record is not None else None,
             metadata=metadata,
         )
         return t
@@ -203,6 +257,8 @@ class LiteralType(_common.FlyteIdlEntity):
             map_value_type=map_value_type,
             blob=_core_types.BlobType.from_flyte_idl(proto.blob) if proto.HasField("blob") else None,
             enum_type=_core_types.EnumType.from_flyte_idl(proto.enum_type) if proto.HasField("enum_type") else None,
+            sum=SumType.from_flyte_idl(proto.sum) if proto.HasField("sum") else None,
+            record=RecordType.from_flyte_idl(proto.record) if proto.HasField("record") else None,
             metadata=_json_format.MessageToDict(proto.metadata) or None,
         )
 

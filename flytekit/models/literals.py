@@ -1,4 +1,5 @@
 from datetime import datetime as _datetime
+from typing import Dict, Optional
 
 import pytz as _pytz
 from flyteidl.core import literals_pb2 as _literals_pb2
@@ -7,6 +8,7 @@ from google.protobuf.struct_pb2 import Struct
 from flytekit.common.exceptions import user as _user_exceptions
 from flytekit.models import common as _common
 from flytekit.models.core import types as _core_types
+from flytekit.models.types import LiteralType as _LiteralType
 from flytekit.models.types import OutputReference as _OutputReference
 from flytekit.models.types import SchemaType as _SchemaType
 
@@ -352,8 +354,31 @@ class BindingDataCollection(_common.FlyteIdlEntity):
         return cls([BindingData.from_flyte_idl(b) for b in pb2_object.bindings])
 
 
+class BindingRecord(_common.FlyteIdlEntity):
+    def __init__(self, fields: Dict[str, "BindingData"]):
+        self._fields = fields
+
+    @property
+    def fields(self):
+        return self._fields
+
+    def to_flyte_idl(self):
+        return _literals_pb2.BindingRecord(
+            fields=[
+                _literals_pb2.BindingRecord.BindingRecordField(name=k, value=v.to_flyte_idl())
+                for k, v in self.fields.items()
+            ]
+        )
+
+    @classmethod
+    def from_flyte_idl(cls, pb2_object):
+        return cls(
+            {x.name: BindingData.from_flyte_idl(x.value) for x in pb2_object.fields},
+        )
+
+
 class BindingData(_common.FlyteIdlEntity):
-    def __init__(self, scalar=None, collection=None, promise=None, map=None):
+    def __init__(self, scalar=None, collection=None, promise=None, map=None, record=None):
         """
         Specifies either a simple value or a reference to another output. Only one of the input arguments may be
         specified.
@@ -368,6 +393,7 @@ class BindingData(_common.FlyteIdlEntity):
         self._collection = collection
         self._promise = promise
         self._map = map
+        self._record = record
 
     @property
     def scalar(self):
@@ -402,12 +428,16 @@ class BindingData(_common.FlyteIdlEntity):
         return self._map
 
     @property
+    def record(self):
+        return self._record
+
+    @property
     def value(self):
         """
         Returns whichever value is set
         :rtype: T
         """
-        return self.scalar or self.collection or self.promise or self.map
+        return self.scalar or self.collection or self.promise or self.map or self._record
 
     def to_flyte_idl(self):
         """
@@ -418,6 +448,7 @@ class BindingData(_common.FlyteIdlEntity):
             collection=self.collection.to_flyte_idl() if self.collection is not None else None,
             promise=self.promise.to_flyte_idl() if self.promise is not None else None,
             map=self.map.to_flyte_idl() if self.map is not None else None,
+            record=self.record.to_flyte_idl() if self.record is not None else None,
         )
 
     @classmethod
@@ -433,6 +464,7 @@ class BindingData(_common.FlyteIdlEntity):
             else None,
             promise=_OutputReference.from_flyte_idl(pb2_object.promise) if pb2_object.HasField("promise") else None,
             map=BindingDataMap.from_flyte_idl(pb2_object.map) if pb2_object.HasField("map") else None,
+            record=BindingRecord.from_flyte_idl(pb2_object.record) if pb2_object.HasField("record") else None,
         )
 
     def to_literal_model(self):
@@ -455,6 +487,10 @@ class BindingData(_common.FlyteIdlEntity):
             )
         elif self.map:
             return Literal(map=LiteralMap(literals={k: binding.to_literal_model() for k, binding in self.map.bindings}))
+        elif self.record:
+            return Literal(
+                record=Record({k: v.to_literal_model() for k, v in self.record.fields.items()}, self.record.type)
+            )
 
 
 class Binding(_common.FlyteIdlEntity):
@@ -718,8 +754,37 @@ class Scalar(_common.FlyteIdlEntity):
         )
 
 
+class Record(_common.FlyteIdlEntity):
+    def __init__(self, fields: Dict[str, "Literal"]):
+        self._fields = fields
+
+    @property
+    def fields(self):
+        return self._fields
+
+    def to_flyte_idl(self):
+        return _literals_pb2.LiteralRecord(
+            fields=[
+                _literals_pb2.LiteralRecord.LiteralRecordField(name=k, value=v.to_flyte_idl())
+                for k, v in self._fields.items()
+            ],
+        )
+
+    @classmethod
+    def from_flyte_idl(cls, pb2_object):
+        return cls(
+            {f.name: Literal.from_flyte_idl(f.value) for f in pb2_object.fields},
+        )
+
+
 class Literal(_common.FlyteIdlEntity):
-    def __init__(self, scalar: Scalar = None, collection: LiteralCollection = None, map: LiteralMap = None):
+    def __init__(
+        self,
+        scalar: Scalar = None,
+        collection: LiteralCollection = None,
+        map: LiteralMap = None,
+        record: Optional[Record] = None,
+    ):
         """
         :param Scalar scalar:
         :param LiteralCollection collection:
@@ -728,6 +793,7 @@ class Literal(_common.FlyteIdlEntity):
         self._scalar = scalar
         self._collection = collection
         self._map = map
+        self._record = record
 
     @property
     def scalar(self):
@@ -754,6 +820,10 @@ class Literal(_common.FlyteIdlEntity):
         return self._map
 
     @property
+    def record(self):
+        return self._record
+
+    @property
     def value(self):
         """
         Returns one of the scalar, collection, or map properties based on which one is set.
@@ -769,6 +839,7 @@ class Literal(_common.FlyteIdlEntity):
             scalar=self.scalar.to_flyte_idl() if self.scalar is not None else None,
             collection=self.collection.to_flyte_idl() if self.collection is not None else None,
             map=self.map.to_flyte_idl() if self.map is not None else None,
+            record=self.record.to_flyte_idl() if self.record is not None else None,
         )
 
     @classmethod
@@ -785,4 +856,5 @@ class Literal(_common.FlyteIdlEntity):
             scalar=Scalar.from_flyte_idl(pb2_object.scalar) if pb2_object.HasField("scalar") else None,
             collection=collection,
             map=LiteralMap.from_flyte_idl(pb2_object.map) if pb2_object.HasField("map") else None,
+            record=Record.from_flyte_idl(pb2_object.record) if pb2_object.HasField("record") else None,
         )
