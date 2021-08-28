@@ -11,14 +11,12 @@ import typing
 from abc import ABC, abstractmethod
 from typing import Type
 
-from dataclasses_json import DataClassJsonMixin
 from google.protobuf import json_format as _json_format
 from google.protobuf import reflection as _proto_reflection
 from google.protobuf import struct_pb2 as _struct
 from google.protobuf.json_format import MessageToDict as _MessageToDict
 from google.protobuf.json_format import ParseDict as _ParseDict
 from google.protobuf.struct_pb2 import Struct
-from marshmallow_jsonschema import JSONSchema
 
 from flytekit.common.types import primitives as _primitives
 from flytekit.core.context_manager import FlyteContext
@@ -27,7 +25,17 @@ from flytekit.loggers import logger
 from flytekit.models import interface as _interface_models
 from flytekit.models import types as _type_models
 from flytekit.models.core import types as _core_types
-from flytekit.models.literals import Blob, BlobMetadata, Literal, LiteralCollection, LiteralMap, Primitive, Scalar
+from flytekit.models.literals import (
+    Blob,
+    BlobMetadata,
+    Literal,
+    LiteralCollection,
+    LiteralMap,
+    Primitive,
+    Record,
+    Scalar,
+    Void,
+)
 from flytekit.models.types import LiteralType, SimpleType
 
 T = typing.TypeVar("T")
@@ -132,7 +140,12 @@ class SimpleTransformer(TypeTransformer[T]):
         return self._to_literal_transformer(python_val)
 
     def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
-        return self._from_literal_transformer(lv)
+        try:
+            return self._from_literal_transformer(lv)
+        except AttributeError:
+            raise AssertionError(
+                f"Could not convert value using simple transformer: '{lv}' to '{expected_python_type}'"
+            )
 
     def guess_python_type(self, literal_type: LiteralType) -> Type[T]:
         if literal_type.simple is not None and literal_type.simple == self._lt.simple:
@@ -175,45 +188,7 @@ class TypeWithMetadataTransformer(TypeTransformer[TypeWithMetadata]):
 class DataclassTransformer(TypeTransformer[object]):
     """
     The Dataclass Transformer, provides a type transformer for arbitrary Python dataclasses, that have
-    @dataclass and @dataclass_json decorators.
-
-    The Dataclass is converted to and from json and is transported between tasks using the proto.Structpb representation
-    Also the type declaration will try to extract the JSON Schema for the object if possible and pass it with the
-    definition.
-
-    For Json Schema, we use https://github.com/fuhrysteve/marshmallow-jsonschema library.
-
-    Example
-
-    .. code-block:: python
-
-        @dataclass_json
-        @dataclass
-        class Test():
-           a: int
-           b: str
-
-        from marshmallow_jsonschema import JSONSchema
-        t = Test(a=10,b="e")
-        JSONSchema().dump(t.schema())
-
-    Output will look like
-
-    .. code-block:: json
-
-        {'$schema': 'http://json-schema.org/draft-07/schema#',
-         'definitions': {'TestSchema': {'properties': {'a': {'title': 'a',
-             'type': 'number',
-             'format': 'integer'},
-            'b': {'title': 'b', 'type': 'string'}},
-           'type': 'object',
-           'additionalProperties': False}},
-         '$ref': '#/definitions/TestSchema'}
-
-    .. note::
-
-        The schema support is experimental and is useful for auto-completing in the UI/CLI
-
+    @dataclass decorators.
     """
 
     def __init__(self):
@@ -224,17 +199,11 @@ class DataclassTransformer(TypeTransformer[object]):
         Extracts the Literal type definition for a Dataclass and returns a type Struct.
         If possible also extracts the JSONSchema for the dataclass.
         """
-        if not issubclass(t, DataClassJsonMixin):
-            raise AssertionError(
-                f"Dataclass {t} should be decorated with @dataclass_json to be " f"serialized correctly"
-            )
-        schema = None
-        try:
-            schema = JSONSchema().dump(t.schema())
-        except Exception as e:
-            logger.warn("failed to extract schema for object %s, (will run schemaless) error: %s", str(t), e)
+        fields = {}
+        for f in dataclasses.fields(t):
+            fields[f.name] = TypeEngine.to_literal_type(f.type)
 
-        return _primitives.Generic.to_flyte_literal_type(metadata=schema)
+        return LiteralType(record=_type_models.RecordType(field_types=fields))
 
     def to_literal(self, ctx: FlyteContext, python_val: T, python_type: Type[T], expected: LiteralType) -> Literal:
         if not dataclasses.is_dataclass(python_val):
@@ -242,11 +211,19 @@ class DataclassTransformer(TypeTransformer[object]):
                 f"{type(python_val)} is not of type @dataclass, only Dataclasses are supported for "
                 f"user defined datatypes in Flytekit"
             )
-        if not issubclass(type(python_val), DataClassJsonMixin):
-            raise AssertionError(
-                f"Dataclass {python_type} should be decorated with @dataclass_json to be " f"serialized correctly"
-            )
-        return Literal(scalar=Scalar(generic=_json_format.Parse(python_val.to_json(), _struct.Struct())))
+
+        if dataclasses.fields(python_val) != dataclasses.fields(python_type):
+            raise AssertionError(f"Dataclass does not matched requested type: '{type(python_val)}' != '{python_type}'")
+
+        if expected.record is None:
+            raise AssertionError(f"Expected type is not a record: '{expected}'")
+
+        res = {}
+        for f in dataclasses.fields(python_type):
+            v = getattr(python_val, f.name)
+            res[f.name] = TypeEngine.to_literal(ctx, v, f.type, expected.record.field_types[f.name])
+
+        return Literal(record=Record(res))
 
     def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
         if not dataclasses.is_dataclass(expected_python_type):
@@ -254,19 +231,72 @@ class DataclassTransformer(TypeTransformer[object]):
                 f"{expected_python_type} is not of type @dataclass, only Dataclasses are supported for "
                 f"user defined datatypes in Flytekit"
             )
-        if not issubclass(expected_python_type, DataClassJsonMixin):
-            raise AssertionError(
-                f"Dataclass {expected_python_type} should be decorated with @dataclass_json to be "
-                f"serialized correctly"
-            )
-        dc = expected_python_type.from_json(_json_format.MessageToJson(lv.scalar.generic))
-        # NOTE: Protobuf Struct does not support explicit int types, int types are upconverted to a double value
-        # https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#google.protobuf.Value
-        # Thus we will have to walk the given dataclass and typecast values to int, where expected.
+
+        if lv.record is None:
+            raise AssertionError(f"Provided literal is not a record: '{lv}'")
+
+        res = {}
         for f in dataclasses.fields(expected_python_type):
-            if f.type == int:
-                dc.__setattr__(f.name, int(dc.__getattribute__(f.name)))
-        return dc
+            if f.name not in lv.record.fields:
+                raise AssertionError(f"Literal is missing a field: '{f.name}'")
+            res[f.name] = TypeEngine.to_python_value(ctx, lv.record.fields[f.name], f.type)
+
+        return expected_python_type(**res)
+
+
+class UnionTransformer(TypeTransformer[typing.Union[typing.Any]]):
+    def __init__(self):
+        super().__init__("Union-Transformer", typing.Union)
+
+    def get_literal_type(self, t: Type[T]) -> LiteralType:
+        summands = [TypeEngine.to_literal_type(x) for x in t.__args__]
+        return LiteralType(sum=_type_models.SumType(summands=summands))
+
+    def to_literal(self, ctx: FlyteContext, python_val: T, python_type: Type[T], expected: LiteralType) -> Literal:
+        if expected.sum is None:
+            raise AssertionError(f"Expected type is not a sum type: '{expected}'")
+
+        typ = None
+        val = None
+        for t in python_type.__args__:
+            try:
+                ltyp = TypeEngine.to_literal_type(t)
+                for s in expected.sum.summands:  # todo(maximsmol): O(n^2) algo, not sure if Type is hashable
+                    if ltyp != s:
+                        continue
+                    typ = s
+
+                if typ is None:
+                    continue
+
+                val = TypeEngine.to_literal(ctx, python_val, t, typ)
+                break
+            except AssertionError as e:
+                continue
+            except ValueError as e:
+                if "not supported" not in str(e):
+                    raise e
+                continue
+
+        if val is None or typ is None:
+            raise ValueError(f"Could not find suitable union instantiation: '{python_val}' ('{python_type}')")
+
+        return val
+
+    def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
+        for x in expected_python_type.__args__:
+            try:
+                res = TypeEngine.to_python_value(ctx, lv, x)
+                if res is None and x != type(None):
+                    continue
+
+                return res
+            except AssertionError:
+                pass
+
+        raise AssertionError(
+            f"Provided literal could not be cast to variant type: '{lv}' not one of '{expected_python_type}'"
+        )
 
 
 class ProtobufTransformer(TypeTransformer[_proto_reflection.GeneratedProtocolMessageType]):
@@ -363,6 +393,9 @@ class TypeEngine(typing.Generic[T]):
         for base_type in cls._REGISTRY.keys():
             if base_type is None:
                 continue  # None is actually one of the keys, but isinstance/issubclass doesn't work on it
+            if base_type is typing.Union or base_type is typing.NamedTuple:
+                # cannot be used with isinstance
+                continue
             if isinstance(python_type, base_type) or (
                 inspect.isclass(python_type) and issubclass(python_type, base_type)
             ):
@@ -382,8 +415,6 @@ class TypeEngine(typing.Generic[T]):
         """
         Converts a python value of a given type and expected ``LiteralType`` into a resolved ``Literal`` value.
         """
-        if python_val is None:
-            raise AssertionError(f"Python value cannot be None, expected {python_type}/{expected}")
         transformer = cls.get_transformer(python_type)
         lv = transformer.to_literal(ctx, python_val, python_type, expected)
         # TODO Perform assertion here
@@ -395,6 +426,7 @@ class TypeEngine(typing.Generic[T]):
         Converts a Literal value with an expected python type into a python value.
         """
         transformer = cls.get_transformer(expected_python_type)
+
         return transformer.to_python_value(ctx, lv, expected_python_type)
 
     @classmethod
@@ -807,7 +839,16 @@ def _register_default_type_transformers():
             "none",
             None,
             _type_models.LiteralType(simple=_type_models.SimpleType.NONE),
+            lambda x: Literal(scalar=Scalar(none_type=Void())),
             lambda x: None,
+        )
+    )
+    TypeEngine.register(
+        SimpleTransformer(
+            "none",
+            type(None),
+            _type_models.LiteralType(simple=_type_models.SimpleType.NONE),
+            lambda x: Literal(scalar=Scalar(none_type=Void())),
             lambda x: None,
         )
     )
@@ -819,6 +860,7 @@ def _register_default_type_transformers():
     TypeEngine.register(EnumTransformer())
     TypeEngine.register(ProtobufTransformer())
     TypeEngine.register(TypeWithMetadataTransformer())
+    TypeEngine.register(UnionTransformer())
 
     # inner type is. Also unsupported are typing's Tuples. Even though you can look inside them, Flyte's type system
     # doesn't support these currently.
