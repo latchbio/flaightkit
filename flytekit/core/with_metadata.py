@@ -2,17 +2,7 @@ from typing import Any, Dict, Tuple, Type
 
 
 class TypeWithMetadata:
-    def __init__(self, type: Type, data: Dict[str, Any]):
-        self._type = type
-        self._data = data
-
-    @property
-    def type(self):
-        return self._type
-
-    @property
-    def data(self):
-        return self._data
+    ...
 
 
 class _WithMetadata:
@@ -29,4 +19,7 @@ class _WithMetadata:
 
 @_WithMetadata
 def WithMetadata(self, type: Type, data: Dict[str, Any]):
-    return TypeWithMetadata(type, data)
+    class TTypeWithMetadata(type, TypeWithMetadata):
+        __flyte_metadata__ = data
+
+    return TTypeWithMetadata

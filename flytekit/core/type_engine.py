@@ -155,22 +155,6 @@ class RestrictedType(TypeTransformer[T], ABC):
         raise RestrictedTypeError(f"Transformer for type {self.python_type} is restricted currently")
 
 
-class TypeWithMetadataTransformer(TypeTransformer[TypeWithMetadata]):
-    def __init__(self):
-        super().__init__("TypeWithMetadataTransformer", TypeWithMetadata)
-
-    def get_literal_type(self, t: Type[T]) -> LiteralType:
-        res = TypeEngine.to_literal_type(t.type)
-        res._metadata = t.data
-        return res
-
-    def to_literal(self, ctx: FlyteContext, python_val: T, python_type: Type[T], expected: LiteralType) -> Literal:
-        return TypeEngine.to_literal(ctx, python_val, python_type.type, expected)
-
-    def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
-        return TypeEngine.to_python_value(ctx, lv, expected_python_type.type)
-
-
 class DataclassTransformer(TypeTransformer[object]):
     """
     The Dataclass Transformer, provides a type transformer for arbitrary Python dataclasses, that have
@@ -372,7 +356,10 @@ class TypeEngine(typing.Generic[T]):
         Converts a python type into a flyte specific ``LiteralType``
         """
         transformer = cls.get_transformer(python_type)
-        return transformer.get_literal_type(python_type)
+        res = transformer.get_literal_type(python_type)
+        if hasattr(python_type, "__flyte_metadata__"):
+            res._metadata = python_type.__flyte_metadata__
+        return res
 
     @classmethod
     def to_literal(cls, ctx: FlyteContext, python_val: typing.Any, python_type: Type, expected: LiteralType) -> Literal:
@@ -815,7 +802,6 @@ def _register_default_type_transformers():
     TypeEngine.register(BinaryIOTransformer())
     TypeEngine.register(EnumTransformer())
     TypeEngine.register(ProtobufTransformer())
-    TypeEngine.register(TypeWithMetadataTransformer())
 
     # inner type is. Also unsupported are typing's Tuples. Even though you can look inside them, Flyte's type system
     # doesn't support these currently.
