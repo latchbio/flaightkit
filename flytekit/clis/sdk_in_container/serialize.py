@@ -150,6 +150,9 @@ def persist_registrable_entities(entities: typing.List, folder: str):
         click.secho(f"  Packaging {name} -> {fname}", dim=True)
         fname = _os.path.join(folder, fname)
         with open(fname, "wb") as writer:
+            # print(fname)
+            # print(entity)
+            # print("\n" * 5)
             writer.write(entity.SerializeToString())
 
 

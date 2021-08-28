@@ -7,7 +7,6 @@ import inspect
 import json as _json
 import mimetypes
 import os
-import traceback
 import typing
 from abc import ABC, abstractmethod
 from typing import Type
@@ -36,6 +35,7 @@ from flytekit.models.literals import (
     Record,
     Scalar,
     Variant,
+    Void,
 )
 from flytekit.models.types import LiteralType, SimpleType
 
@@ -141,7 +141,12 @@ class SimpleTransformer(TypeTransformer[T]):
         return self._to_literal_transformer(python_val)
 
     def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
-        return self._from_literal_transformer(lv)
+        try:
+            return self._from_literal_transformer(lv)
+        except AttributeError:
+            raise AssertionError(
+                f"Could not convert value using simple transformer: '{lv}' to '{expected_python_type}'"
+            )
 
     def guess_python_type(self, literal_type: LiteralType) -> Type[T]:
         if literal_type.simple is not None and literal_type.simple == self._lt.simple:
@@ -192,6 +197,9 @@ class DataclassTransformer(TypeTransformer[object]):
                 f"user defined datatypes in Flytekit"
             )
 
+        if dataclasses.fields(python_val) != dataclasses.fields(python_type):
+            raise AssertionError(f"Dataclass does not matched requested type: '{type(python_val)}' != '{python_type}'")
+
         if expected.record is None:
             raise AssertionError(f"Expected type is not a record: '{expected}'")
 
@@ -200,7 +208,7 @@ class DataclassTransformer(TypeTransformer[object]):
             v = getattr(python_val, f.name)
             res[f.name] = TypeEngine.to_literal(ctx, v, f.type, expected.record.field_types[f.name])
 
-        return Literal(record=Record(res, type=expected.record))
+        return Literal(record=Record(res))
 
     def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
         if not dataclasses.is_dataclass(expected_python_type):
@@ -214,6 +222,8 @@ class DataclassTransformer(TypeTransformer[object]):
 
         res = {}
         for f in dataclasses.fields(expected_python_type):
+            if f.name not in lv.record.fields:
+                raise AssertionError(f"Literal is missing a field: '{f.name}'")
             res[f.name] = TypeEngine.to_python_value(ctx, lv.record.fields[f.name], f.type)
 
         return expected_python_type(**res)
@@ -231,39 +241,50 @@ class UnionTransformer(TypeTransformer[typing.Union[typing.Any]]):
         if expected.sum is None:
             raise AssertionError(f"Expected type is not a sum type: '{expected}'")
 
-        idx = None
+        typ = None
         val = None
-        for i, t in enumerate(python_type.__args__):
+        for t in python_type.__args__:
             try:
-                if type(python_val) != t:
-                    continue
-                if TypeEngine.to_literal_type(type(python_val)) != expected.sum.summands[i]:
+                ltyp = TypeEngine.to_literal_type(t)
+                for s in expected.sum.summands:  # todo(maximsmol): O(n^2) algo, not sure if Type is hashable
+                    if ltyp != s:
+                        continue
+                    typ = s
+
+                if typ is None:
                     continue
 
-                val = TypeEngine.to_literal(ctx, python_val, t, expected.sum.summands[i])
-                idx = i
+                val = TypeEngine.to_literal(ctx, python_val, t, typ)
                 break
+            except AssertionError as e:
+                continue
             except ValueError as e:
                 if "not supported" not in str(e):
                     raise e
                 continue
 
-        if val is None or idx is None:
+        if val is None or typ is None:
             raise ValueError(f"Could not find suitable union instantiation: '{python_val}' ('{python_type}')")
 
-        return Literal(variant=Variant(idx=idx, value=val, type=expected.sum))
-
-    def to_python_value_known(self, ctx: FlyteContext, lv: Literal, known_python_type: Type[T]) -> T:
-        if lv.variant is None:
-            raise AssertionError(f"Provided literal is not a variant: '{lv}'")
-
-        return TypeEngine.to_python_value(ctx, lv.variant.value, known_python_type)
+        return Literal(variant=Variant(type=typ, value=val))
 
     def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
-        if lv.variant is None:
-            raise AssertionError(f"Provided literal is not a variant: '{lv}'")
+        if lv.variant is not None:
+            return TypeEngine.to_python_value(ctx, lv.variant.value, TypeEngine.to_literal_type(lv.variant.type))
 
-        self.to_python_value_known(ctx, lv.variant.value, expected_python_type.__args__[lv.variant.idx])
+        for x in expected_python_type.__args__:
+            try:
+                res = TypeEngine.to_python_value(ctx, lv, x)
+                if res is None and x != type(None):
+                    continue
+
+                return res
+            except AssertionError:
+                pass
+
+        raise AssertionError(
+            f"Provided literal could not be cast to variant type: '{lv}' not one of '{expected_python_type}'"
+        )
 
 
 class ProtobufTransformer(TypeTransformer[_proto_reflection.GeneratedProtocolMessageType]):
@@ -303,7 +324,6 @@ class TypeEngine(typing.Generic[T]):
 
     _REGISTRY: typing.Dict[type, TypeTransformer[T]] = {}
     _DATACLASS_TRANSFORMER: TypeTransformer = DataclassTransformer()
-    _UNION_TRANSFORMER = UnionTransformer()
 
     @classmethod
     def register(cls, transformer: TypeTransformer):
@@ -361,6 +381,9 @@ class TypeEngine(typing.Generic[T]):
         for base_type in cls._REGISTRY.keys():
             if base_type is None:
                 continue  # None is actually one of the keys, but isinstance/issubclass doesn't work on it
+            if base_type is typing.Union or base_type is typing.NamedTuple:
+                # cannot be used with isinstance
+                continue
             if isinstance(python_type, base_type) or (
                 inspect.isclass(python_type) and issubclass(python_type, base_type)
             ):
@@ -380,8 +403,6 @@ class TypeEngine(typing.Generic[T]):
         """
         Converts a python value of a given type and expected ``LiteralType`` into a resolved ``Literal`` value.
         """
-        if python_val is None:
-            raise AssertionError(f"Python value cannot be None, expected {python_type}/{expected}")
         transformer = cls.get_transformer(python_type)
         lv = transformer.to_literal(ctx, python_val, python_type, expected)
         # TODO Perform assertion here
@@ -393,11 +414,6 @@ class TypeEngine(typing.Generic[T]):
         Converts a Literal value with an expected python type into a python value.
         """
         transformer = cls.get_transformer(expected_python_type)
-
-        if lv.variant is not None and (
-            not hasattr(expected_python_type, "__origin__") or expected_python_type.__origin__ != typing.Union
-        ):
-            return cls._UNION_TRANSFORMER.to_python_value_known(ctx, lv, expected_python_type)
 
         return transformer.to_python_value(ctx, lv, expected_python_type)
 
@@ -811,7 +827,16 @@ def _register_default_type_transformers():
             "none",
             None,
             _type_models.LiteralType(simple=_type_models.SimpleType.NONE),
+            lambda x: Literal(scalar=Scalar(none_type=Void())),
             lambda x: None,
+        )
+    )
+    TypeEngine.register(
+        SimpleTransformer(
+            "none",
+            type(None),
+            _type_models.LiteralType(simple=_type_models.SimpleType.NONE),
+            lambda x: Literal(scalar=Scalar(none_type=Void())),
             lambda x: None,
         )
     )

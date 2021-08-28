@@ -125,14 +125,16 @@ class RecordType(_common.FlyteIdlEntity):
 
     def to_flyte_idl(self):
         return _types_pb2.RecordType(
-            fields=[_types_pb2.RecordType.RecordField(k, v.to_flyte_idl()) for k, v in self.field_types.items()]
+            fields=[
+                _types_pb2.RecordType.RecordField(name=k, type=v.to_flyte_idl()) for k, v in self.field_types.items()
+            ]
         )
 
     @classmethod
     def from_flyte_idl(cls, proto):
         fields = {}
         for f in proto.fields:
-            fields[f.name] = LiteralType.from_flyte_idl(f.value)
+            fields[f.name] = LiteralType.from_flyte_idl(f.type)
         return cls(field_types=fields)
 
 

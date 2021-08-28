@@ -8,10 +8,9 @@ from google.protobuf.struct_pb2 import Struct
 from flytekit.common.exceptions import user as _user_exceptions
 from flytekit.models import common as _common
 from flytekit.models.core import types as _core_types
+from flytekit.models.types import LiteralType as _LiteralType
 from flytekit.models.types import OutputReference as _OutputReference
-from flytekit.models.types import RecordType as _RecordType
 from flytekit.models.types import SchemaType as _SchemaType
-from flytekit.models.types import SumType as _SumType
 
 
 class RetryStrategy(_common.FlyteIdlEntity):
@@ -141,7 +140,6 @@ class Primitive(_common.FlyteIdlEntity):
         """
         :rtype: flyteidl.core.literals_pb2.Primitive
         """
-        print(self.integer, self.float_value, self.string_value, self.boolean)
         primitive = _literals_pb2.Primitive(
             integer=self.integer,
             float_value=self.float_value,
@@ -356,8 +354,31 @@ class BindingDataCollection(_common.FlyteIdlEntity):
         return cls([BindingData.from_flyte_idl(b) for b in pb2_object.bindings])
 
 
+class BindingRecord(_common.FlyteIdlEntity):
+    def __init__(self, fields: Dict[str, "BindingData"]):
+        self._fields = fields
+
+    @property
+    def fields(self):
+        return self._fields
+
+    def to_flyte_idl(self):
+        return _literals_pb2.BindingRecord(
+            fields=[
+                _literals_pb2.BindingRecord.BindingRecordField(name=k, value=v.to_flyte_idl())
+                for k, v in self.fields.items()
+            ]
+        )
+
+    @classmethod
+    def from_flyte_idl(cls, pb2_object):
+        return cls(
+            {x.name: BindingData.from_flyte_idl(x.value) for x in pb2_object.fields},
+        )
+
+
 class BindingData(_common.FlyteIdlEntity):
-    def __init__(self, scalar=None, collection=None, promise=None, map=None):
+    def __init__(self, scalar=None, collection=None, promise=None, map=None, record=None):
         """
         Specifies either a simple value or a reference to another output. Only one of the input arguments may be
         specified.
@@ -372,6 +393,7 @@ class BindingData(_common.FlyteIdlEntity):
         self._collection = collection
         self._promise = promise
         self._map = map
+        self._record = record
 
     @property
     def scalar(self):
@@ -406,12 +428,16 @@ class BindingData(_common.FlyteIdlEntity):
         return self._map
 
     @property
+    def record(self):
+        return self._record
+
+    @property
     def value(self):
         """
         Returns whichever value is set
         :rtype: T
         """
-        return self.scalar or self.collection or self.promise or self.map
+        return self.scalar or self.collection or self.promise or self.map or self._record
 
     def to_flyte_idl(self):
         """
@@ -422,6 +448,7 @@ class BindingData(_common.FlyteIdlEntity):
             collection=self.collection.to_flyte_idl() if self.collection is not None else None,
             promise=self.promise.to_flyte_idl() if self.promise is not None else None,
             map=self.map.to_flyte_idl() if self.map is not None else None,
+            record=self.record.to_flyte_idl() if self.record is not None else None,
         )
 
     @classmethod
@@ -437,6 +464,7 @@ class BindingData(_common.FlyteIdlEntity):
             else None,
             promise=_OutputReference.from_flyte_idl(pb2_object.promise) if pb2_object.HasField("promise") else None,
             map=BindingDataMap.from_flyte_idl(pb2_object.map) if pb2_object.HasField("map") else None,
+            record=BindingRecord.from_flyte_idl(pb2_object.record) if pb2_object.HasField("record") else None,
         )
 
     def to_literal_model(self):
@@ -459,6 +487,10 @@ class BindingData(_common.FlyteIdlEntity):
             )
         elif self.map:
             return Literal(map=LiteralMap(literals={k: binding.to_literal_model() for k, binding in self.map.bindings}))
+        elif self.record:
+            return Literal(
+                record=Record({k: v.to_literal_model() for k, v in self.record.fields.items()}, self.record.type)
+            )
 
 
 class Binding(_common.FlyteIdlEntity):
@@ -723,60 +755,49 @@ class Scalar(_common.FlyteIdlEntity):
 
 
 class Variant(_common.FlyteIdlEntity):
-    def __init__(self, idx: int, value: "Literal", type: _SumType):
-        self._idx = idx
-        self._value = value
+    def __init__(self, type: _LiteralType, value: "Literal"):
         self._type = type
+        self._value = value
 
     @property
-    def idx(self):
-        return self._idx
+    def type(self):
+        return self._type
 
     @property
     def value(self):
         return self._value
 
-    @property
-    def type(self):
-        return self._type
-
     def to_flyte_idl(self):
         return _literals_pb2.LiteralVariant(
-            idx=self._idx, value=self.value.to_flyte_idl(), type=self.type.to_flyte_idl()
+            type=self._type.to_flyte_idl(),
+            value=self.value.to_flyte_idl(),
         )
 
     @classmethod
     def from_flyte_idl(cls, pb2_object):
-        return cls(pb2_object.idx, pb2_object.value, pb2_object.type)
+        return cls(pb2_object.type, pb2_object.value)
 
 
 class Record(_common.FlyteIdlEntity):
-    def __init__(self, fields: Dict[str, "Literal"], type: _RecordType):
+    def __init__(self, fields: Dict[str, "Literal"]):
         self._fields = fields
-        self._type = type
 
     @property
     def fields(self):
         return self._fields
 
-    @property
-    def type(self):
-        return self._type
-
     def to_flyte_idl(self):
         return _literals_pb2.LiteralRecord(
             fields=[
-                _literals_pb2.LiteralRecord.LiteralRecordField(name=k, value=v.to_flyte_idl)
+                _literals_pb2.LiteralRecord.LiteralRecordField(name=k, value=v.to_flyte_idl())
                 for k, v in self._fields.items()
             ],
-            type=self.type.to_flyte_idl(),
         )
 
     @classmethod
     def from_flyte_idl(cls, pb2_object):
         return cls(
             {f.name: Literal.from_flyte_idl(f.value) for f in pb2_object.fields},
-            _RecordType.from_flyte_idl(pb2_object.type),
         )
 
 
