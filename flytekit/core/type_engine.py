@@ -21,6 +21,7 @@ from marshmallow_jsonschema import JSONSchema
 
 from flytekit.common.types import primitives as _primitives
 from flytekit.core.context_manager import FlyteContext
+from flytekit.core.with_metadata import TypeWithMetadata
 from flytekit.loggers import logger
 from flytekit.models import interface as _interface_models
 from flytekit.models import types as _type_models
@@ -152,6 +153,22 @@ class RestrictedType(TypeTransformer[T], ABC):
 
     def get_literal_type(self, t: Type[T] = None) -> LiteralType:
         raise RestrictedTypeError(f"Transformer for type {self.python_type} is restricted currently")
+
+
+class TypeWithMetadataTransformer(TypeTransformer[TypeWithMetadata]):
+    def __init__(self):
+        super().__init__("TypeWithMetadataTransformer", TypeWithMetadata)
+
+    def get_literal_type(self, t: Type[T]) -> LiteralType:
+        res = TypeEngine.to_literal_type(t.type)
+        res._metadata = t.data
+        return res
+
+    def to_literal(self, ctx: FlyteContext, python_val: T, python_type: Type[T], expected: LiteralType) -> Literal:
+        return TypeEngine.to_literal(ctx, python_val, python_type.type, expected)
+
+    def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
+        return TypeEngine.to_python_value(ctx, lv, expected_python_type.type)
 
 
 class DataclassTransformer(TypeTransformer[object]):
@@ -797,6 +814,8 @@ def _register_default_type_transformers():
     TypeEngine.register(PathLikeTransformer())
     TypeEngine.register(BinaryIOTransformer())
     TypeEngine.register(EnumTransformer())
+    TypeEngine.register(ProtobufTransformer())
+    TypeEngine.register(TypeWithMetadataTransformer())
 
     # inner type is. Also unsupported are typing's Tuples. Even though you can look inside them, Flyte's type system
     # doesn't support these currently.
