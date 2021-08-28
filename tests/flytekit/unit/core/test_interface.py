@@ -4,7 +4,7 @@ import typing
 from typing import Dict, List
 
 from flytekit.core import context_manager
-from flytekit.core.docstring import Docstring
+from flytekit.core.docstring import Docstring, parse_docstring
 from flytekit.core.interface import (
     extract_return_annotation,
     transform_inputs_to_parameters,
@@ -192,7 +192,7 @@ def test_parameters_with_docstring():
         """
         ...
 
-    our_interface = transform_signature_to_interface(inspect.signature(z), Docstring(callable_=z))
+    our_interface = transform_signature_to_interface(inspect.signature(z), parse_docstring(z))
     params = transform_inputs_to_parameters(ctx, our_interface)
     assert params.parameters["a"].var.description == "foo"
     assert params.parameters["b"].var.description == "bar"
@@ -210,7 +210,7 @@ def test_transform_interface_to_typed_interface_with_docstring():
         """
         ...
 
-    our_interface = transform_signature_to_interface(inspect.signature(z), Docstring(callable_=z))
+    our_interface = transform_signature_to_interface(inspect.signature(z), parse_docstring(z))
     typed_interface = transform_interface_to_typed_interface(our_interface)
     assert typed_interface.inputs.get("a").description == "foo"
     assert typed_interface.inputs.get("b").description == "bar"
@@ -235,7 +235,7 @@ def test_transform_interface_to_typed_interface_with_docstring():
         """
         ...
 
-    our_interface = transform_signature_to_interface(inspect.signature(z), Docstring(callable_=z))
+    our_interface = transform_signature_to_interface(inspect.signature(z), parse_docstring(z))
     typed_interface = transform_interface_to_typed_interface(our_interface)
     assert typed_interface.inputs.get("a").description == "foo"
     assert typed_interface.inputs.get("b").description == "bar"
@@ -263,7 +263,7 @@ def test_transform_interface_to_typed_interface_with_docstring():
         """
         ...
 
-    our_interface = transform_signature_to_interface(inspect.signature(z), Docstring(callable_=z))
+    our_interface = transform_signature_to_interface(inspect.signature(z), parse_docstring(z))
     typed_interface = transform_interface_to_typed_interface(our_interface)
     assert typed_interface.inputs.get("a").description == "foo"
     assert typed_interface.inputs.get("b").description == "bar"
