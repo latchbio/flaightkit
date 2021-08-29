@@ -126,7 +126,7 @@ class PythonFunctionTask(PythonAutoContainerTask[T]):
             interface=mutated_interface,
             task_config=task_config,
             task_resolver=task_resolver,
-            docstring=Docstring(callable_=task_function),
+            docstring=parse_docstring(task_function),
             **kwargs,
         )
 

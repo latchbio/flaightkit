@@ -801,7 +801,6 @@ def _register_default_type_transformers():
     TypeEngine.register(PathLikeTransformer())
     TypeEngine.register(BinaryIOTransformer())
     TypeEngine.register(EnumTransformer())
-    TypeEngine.register(ProtobufTransformer())
 
     # inner type is. Also unsupported are typing's Tuples. Even though you can look inside them, Flyte's type system
     # doesn't support these currently.

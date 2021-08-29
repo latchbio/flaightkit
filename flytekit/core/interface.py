@@ -28,6 +28,7 @@ class Interface(object):
         inputs: typing.Optional[typing.Dict[str, Union[Type, Tuple[Type, Any]]]] = None,
         outputs: typing.Optional[typing.Dict[str, Type]] = None,
         output_tuple_name: Optional[str] = None,
+        docstring: Optional[Docstring] = None,
     ):
         """
         :param outputs: Output variables and their types as a dictionary
@@ -38,6 +39,8 @@ class Interface(object):
             returns one. This is also used as a proxy for better or for worse for the presence of a tuple return type,
             primarily used when handling one-element NamedTuples.
         """
+        self._docstring = docstring
+
         self._inputs = {}
         if inputs:
             for k, v in inputs.items():
@@ -82,6 +85,10 @@ class Interface(object):
                     ...  # See runs_before
 
             self._output_tuple_class = Output
+
+    @property
+    def docstring(self):
+        return self._docstring
 
     @property
     def output_tuple(self) -> Optional[Type[collections.namedtuple]]:
@@ -198,8 +205,8 @@ def transform_interface_to_typed_interface(
     if docstring is None:
         input_descriptions = output_descriptions = {}
     else:
-        input_descriptions = param_metadata_from_docstring(interface.docstring)
-        output_descriptions = returns_metadata_from_docstring(interface.docstring)
+        input_descriptions = param_metadata_from_docstring(docstring)
+        output_descriptions = returns_metadata_from_docstring(docstring)
 
     if len(output_descriptions) == 1:
         name, desc = next(iter(output_descriptions.items()))
@@ -248,7 +255,7 @@ def transform_interface_to_list_interface(interface: Interface) -> Interface:
     return Interface(inputs=map_inputs, outputs=map_outputs)
 
 
-def transform_signature_to_interface(signature: inspect.Signature) -> Interface:
+def transform_signature_to_interface(signature: inspect.Signature, docstring: Optional[Docstring] = None) -> Interface:
     """
     From the annotations on a task function that the user should have provided, and the output names they want to use
     for each output parameter, construct the TypedInterface object
@@ -273,7 +280,7 @@ def transform_signature_to_interface(signature: inspect.Signature) -> Interface:
             if hasattr(return_annotation, "__name__") and return_annotation.__name__ != "":
                 custom_name = return_annotation.__name__
 
-    return Interface(inputs, outputs, output_tuple_name=custom_name)
+    return Interface(inputs, outputs, output_tuple_name=custom_name, docstring=docstring)
 
 
 def transform_variable_map(
