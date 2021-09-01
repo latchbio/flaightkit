@@ -210,8 +210,7 @@ class FileAccessProvider(object):
 
     @staticmethod
     def is_remote(path: Union[str, os.PathLike]) -> bool:
-        if path.startswith("s3:/") or path.startswith("gs:/") or
-        path.startswith("file:/") or path.startswith("http") or path.startswith("latch:/"):
+        if path.startswith("s3:/") or path.startswith("gs:/") or path.startswith("file:/") or path.startswith("http") or path.startswith("latch:/"):
             return True
         return False
 
