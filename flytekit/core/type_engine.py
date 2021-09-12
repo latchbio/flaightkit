@@ -20,7 +20,7 @@ from google.protobuf.struct_pb2 import Struct
 
 from flytekit.common.types import primitives as _primitives
 from flytekit.core.context_manager import FlyteContext
-from flytekit.core.with_metadata import TypeWithMetadata
+from flytekit.core.with_metadata import FlyteMetadata
 from flytekit.loggers import logger
 from flytekit.models import interface as _interface_models
 from flytekit.models import types as _type_models
@@ -167,6 +167,7 @@ class RestrictedType(TypeTransformer[T], ABC):
 
     def get_literal_type(self, t: Type[T] = None) -> LiteralType:
         raise RestrictedTypeError(f"Transformer for type {self.python_type} is restricted currently")
+
 
 class DataclassTransformer(TypeTransformer[object]):
     """
@@ -392,8 +393,26 @@ class TypeEngine(typing.Generic[T]):
         """
         transformer = cls.get_transformer(python_type)
         res = transformer.get_literal_type(python_type)
-        if hasattr(python_type, "__flyte_metadata__"):
-            res._metadata = python_type.__flyte_metadata__
+        meta = None
+        if hasattr(python_type, "__metadata__"):
+            for x in python_type.__metadata__:
+                if not isinstance(x, FlyteMetadata):
+                    continue
+                if x.data.get("__consumed", False):
+                    continue
+                meta = x.data
+                x.data["__consumed"] = True
+
+        if meta is not None:
+            return LiteralType(
+                simple=res.simple,
+                schema=res.schema,
+                collection_type=res.collection_type,
+                map_value_type=res.map_value_type,
+                blob=res.blob,
+                enum_type=res.enum_type,
+                metadata=meta,
+            )
         return res
 
     @classmethod
