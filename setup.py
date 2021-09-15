@@ -95,6 +95,7 @@ setup(
         "singledispatchmethod; python_version < '3.8.0'",
         "docstring-parser>=0.9.0",
         "joblib>=1.0.0",
+        "pyyaml==5.4.1",
     ],
     extras_require=extras_require,
     scripts=[
