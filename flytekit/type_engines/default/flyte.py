@@ -10,7 +10,6 @@ from flytekit.common.types import helpers as _helpers
 from flytekit.common.types import primitives as _primitive_types
 from flytekit.common.types import proto as _proto
 from flytekit.common.types import schema as _schema
-from flytekit.common.types import variant as _variant
 from flytekit.models import types as _literal_type_models
 from flytekit.models.core import types as _core_types
 
