@@ -282,6 +282,11 @@ class UnionTransformer(TypeTransformer[typing.Union[typing.Any]]):
             f"Provided literal could not be cast to variant type: '{lv}' not one of '{expected_python_type}'"
         )
 
+    def guess_python_type(self, literal_type: LiteralType) -> typing.Union[typing.Any]:
+        if literal_type.sum is not None:
+            return typing.Union[typing.Any]
+        raise ValueError(f"Enum transformer cannot reverse {literal_type}")
+
 
 class ProtobufTransformer(TypeTransformer[_proto_reflection.GeneratedProtocolMessageType]):
     PB_FIELD_KEY = "pb_type"
