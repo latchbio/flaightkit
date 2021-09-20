@@ -284,7 +284,7 @@ class UnionTransformer(TypeTransformer[typing.Union[typing.Any]]):
 
     def guess_python_type(self, literal_type: LiteralType) -> typing.Union[typing.Any]:
         if literal_type.sum is not None:
-            return typing.Union[typing.Any]
+            return typing.Union[tuple(TypeEngine.guess_python_type(x) for x in literal_type.sum.summands)]
         raise ValueError(f"Enum transformer cannot reverse {literal_type}")
 
 
