@@ -65,7 +65,7 @@ setup(
         ]
     },
     install_requires=[
-        f"flyteidl {os.environ.get('FLYTEIDL_VERSION', '>=0.19.18,<1.0.0')}",
+        f"flyteidl {os.environ.get('FLYTEIDL_VERSION', '@ git+ssh://git@github.com/latchbio/flaightidl@v1.0.0')}",
         "wheel>=0.30.0,<1.0.0",
         "pandas>=1.0.0,<2.0.0",
         "pyarrow>=2.0.0,<4.0.0",
@@ -95,6 +95,7 @@ setup(
         "singledispatchmethod; python_version < '3.8.0'",
         "docstring-parser>=0.9.0",
         "joblib>=1.0.0",
+        "pyyaml==5.4.1",
     ],
     extras_require=extras_require,
     scripts=[
