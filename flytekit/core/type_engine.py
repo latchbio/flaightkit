@@ -272,7 +272,7 @@ class UnionTransformer(TypeTransformer[typing.Union[typing.Any]]):
             try:
                 res = TypeEngine.to_python_value(ctx, lv, x)
 
-                if (res is None and lv is None and x == type(None)) or (
+                if (res is None and lv == Literal(scalar=Scalar(none_type=Void())) and x == type(None)) or (
                     res is not None and x != type(None)
                 ):
                     return res
