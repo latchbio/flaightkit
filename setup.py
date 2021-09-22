@@ -65,7 +65,7 @@ setup(
         ]
     },
     install_requires=[
-        f"flyteidl {os.environ.get('FLYTEIDL_VERSION', '@ git+ssh://git@github.com/latchbio/flaightidl@v1.0.0')}",
+        f"flyteidl {os.environ.get('FLYTEIDL_VERSION', '@ git+ssh://git@github.com/latchbio/flaightidl')}",
         "wheel>=0.30.0,<1.0.0",
         "pandas>=1.0.0,<2.0.0",
         "pyarrow>=2.0.0,<4.0.0",
