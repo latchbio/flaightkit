@@ -269,10 +269,13 @@ class UnionTransformer(TypeTransformer[typing.Union[typing.Any]]):
 
     def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
         for x in expected_python_type.__args__:
+
+            void_literal = Literal(scalar=Scalar(none_type=Void()))
+
             try:
                 res = TypeEngine.to_python_value(ctx, lv, x)
 
-                if (res is None and lv == Literal(scalar=Scalar(none_type=Void())) and x == type(None)) or (
+                if (res is None and lv == void_literal and x == type(None)) or (
                     res is not None and x != type(None)
                 ):
                     return res
