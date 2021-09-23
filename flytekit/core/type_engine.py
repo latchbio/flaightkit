@@ -253,6 +253,9 @@ class UnionTransformer(TypeTransformer[typing.Union[typing.Any]]):
                 if typ is None:
                     continue
 
+                if t == type(None) and python_val is not None:
+                    continue
+
                 val = TypeEngine.to_literal(ctx, python_val, t, typ)
                 break
             except AssertionError as e:
