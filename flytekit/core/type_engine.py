@@ -278,9 +278,7 @@ class UnionTransformer(TypeTransformer[typing.Union[typing.Any]]):
             try:
                 res = TypeEngine.to_python_value(ctx, lv, x)
 
-                if (res is None and lv == void_literal and x == type(None)) or (
-                    res is not None and x != type(None)
-                ):
+                if (res is None and lv == void_literal and x == type(None)) or (res is not None and x != type(None)):
                     return res
 
             except AssertionError:
@@ -553,6 +551,9 @@ class ListTransformer(TypeTransformer[T]):
         return Literal(collection=LiteralCollection(literals=lit_list))
 
     def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
+        if lv.collection is None:
+            raise AssertionError(f"Provided literal is not a list: {lv}")
+
         st = self.get_sub_type(expected_python_type)
         return [TypeEngine.to_python_value(ctx, x, st) for x in lv.collection.literals]
 
