@@ -281,7 +281,7 @@ class UnionTransformer(TypeTransformer[typing.Union[typing.Any]]):
                 if (res is None and lv == void_literal and x == type(None)) or (res is not None and x != type(None)):
                     return res
 
-            except AssertionError:
+            except Exception:
                 pass
 
         raise AssertionError(
