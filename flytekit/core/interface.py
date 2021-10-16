@@ -181,13 +181,12 @@ def transform_inputs_to_parameters(
     params = {}
     inputs_with_def = interface.inputs_with_defaults
     for k, v in inputs_vars.items():
-        required = k not in inputs_with_def
+        default = inputs_with_def[k][1]
+        required = default == inspect.Parameter.empty
 
         default_lv = None
         if not required:
-            default_lv = TypeEngine.to_literal(
-                ctx, inputs_with_def[k][1], python_type=interface.inputs[k], expected=v.type
-            )
+            default_lv = TypeEngine.to_literal(ctx, default, python_type=interface.inputs[k], expected=v.type)
         params[k] = _interface_models.Parameter(var=v, default=default_lv, required=required)
     return _interface_models.ParameterMap(params)
 
@@ -267,8 +266,6 @@ def transform_signature_to_interface(signature: inspect.Signature, docstring: Op
     inputs = OrderedDict()
     for k, v in signature.parameters.items():
         # Inputs with default values are currently ignored, we may want to look into that in the future
-        if v.default is inspect.Parameter.empty:
-            continue
         inputs[k] = (v.annotation, v.default)
 
     # This is just for typing.NamedTuples - in those cases, the user can select a name to call the NamedTuple. We
