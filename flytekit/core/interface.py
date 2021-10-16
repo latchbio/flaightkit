@@ -113,7 +113,7 @@ class Interface(object):
 
     @property
     def default_inputs_as_kwargs(self) -> Dict[str, Any]:
-        return {k: v[1] for k, v in self._inputs.items() if v[1] is not None}
+        return {k: v[1] for k, v in self._inputs.items()}
 
     @property
     def outputs(self) -> typing.Dict[str, type]:
@@ -181,11 +181,13 @@ def transform_inputs_to_parameters(
     params = {}
     inputs_with_def = interface.inputs_with_defaults
     for k, v in inputs_vars.items():
-        val, _default = inputs_with_def[k]
-        required = _default is None
+        required = k not in inputs_with_def
+
         default_lv = None
-        if _default is not None:
-            default_lv = TypeEngine.to_literal(ctx, _default, python_type=interface.inputs[k], expected=v.type)
+        if not required:
+            default_lv = TypeEngine.to_literal(
+                ctx, inputs_with_def[k][1], python_type=interface.inputs[k], expected=v.type
+            )
         params[k] = _interface_models.Parameter(var=v, default=default_lv, required=required)
     return _interface_models.ParameterMap(params)
 
@@ -265,7 +267,9 @@ def transform_signature_to_interface(signature: inspect.Signature, docstring: Op
     inputs = OrderedDict()
     for k, v in signature.parameters.items():
         # Inputs with default values are currently ignored, we may want to look into that in the future
-        inputs[k] = (v.annotation, v.default if v.default is not inspect.Parameter.empty else None)
+        if v.default is inspect.Parameter.empty:
+            continue
+        inputs[k] = (v.annotation, v.default)
 
     # This is just for typing.NamedTuples - in those cases, the user can select a name to call the NamedTuple. We
     # would like to preserve that name in our custom collections.namedtuple.
