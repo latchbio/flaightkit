@@ -137,6 +137,8 @@ class SimpleTransformer(TypeTransformer[T]):
         return self._lt
 
     def to_literal(self, ctx: FlyteContext, python_val: T, python_type: Type[T], expected: LiteralType) -> Literal:
+        if type(python_val) != python_type:
+            raise AssertionError("Could not convert value using simple transformer")
         return self._to_literal_transformer(python_val)
 
     def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
@@ -258,11 +260,7 @@ class UnionTransformer(TypeTransformer[typing.Union[typing.Any]]):
 
                 val = TypeEngine.to_literal(ctx, python_val, t, typ)
                 break
-            except AssertionError as e:
-                continue
-            except ValueError as e:
-                if "not supported" not in str(e):
-                    raise e
+            except Exception:
                 continue
 
         if val is None or typ is None:
