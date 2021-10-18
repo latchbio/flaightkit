@@ -137,8 +137,13 @@ class SimpleTransformer(TypeTransformer[T]):
         return self._lt
 
     def to_literal(self, ctx: FlyteContext, python_val: T, python_type: Type[T], expected: LiteralType) -> Literal:
+        if hasattr(python_type, "__metadata__"):
+            # typing.Annotated
+            return self.to_literal(ctx, python_val, python_type.__origin__, expected)
         if type(python_val) != python_type:
-            raise AssertionError("Could not convert value using simple transformer")
+            raise AssertionError(
+                f"Could not convert value using simple transformer: '{type(python_val)}' != expected '{python_type}'"
+            )
         return self._to_literal_transformer(python_val)
 
     def to_python_value(self, ctx: FlyteContext, lv: Literal, expected_python_type: Type[T]) -> T:
@@ -373,6 +378,9 @@ class TypeEngine(typing.Generic[T]):
 
         # Step 2
         if hasattr(python_type, "__origin__"):
+            if hasattr(python_type.__origin__, "__origin__"):
+                # special handling for typing.Annotated that holds generic types
+                return cls.get_transformer(python_type.__origin__)
             if python_type.__origin__ in cls._REGISTRY:
                 return cls._REGISTRY[python_type.__origin__]
             raise ValueError(f"Generic Type {python_type.__origin__} not supported currently in Flytekit.")
@@ -528,8 +536,12 @@ class ListTransformer(TypeTransformer[T]):
         """
         Return the generic Type T of the List
         """
-        if hasattr(t, "__origin__") and t.__origin__ is list:
-            if hasattr(t, "__args__"):
+
+        if hasattr(t, "__origin__"):
+            if hasattr(t.__origin__, "__origin__"):
+                # special handling for typing.Annotated
+                return ListTransformer.get_sub_type(t.__origin__)
+            if t.__origin__ is list and hasattr(t, "__args__"):
                 return t.__args__[0]
         raise ValueError("Only generic univariate typing.List[T] type is supported.")
 
@@ -576,8 +588,12 @@ class DictTransformer(TypeTransformer[dict]):
         """
         Return the generic Type T of the Dict
         """
-        if hasattr(t, "__origin__") and t.__origin__ is dict:
-            if hasattr(t, "__args__"):
+        if hasattr(t, "__origin__"):
+            if hasattr(t, "__origin__"):
+                if hasattr(t.__origin__, "__origin__"):
+                    # special handling for typing.Annotated
+                    return DictTransformer.get_sub_type(t.__origin__)
+            if t.__origin__ is dict and hasattr(t, "__args__"):
                 return t.__args__
         return None, None
 
