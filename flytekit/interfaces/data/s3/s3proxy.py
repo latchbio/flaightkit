@@ -151,6 +151,7 @@ class AwsS3Proxy(_common_data.DataProxy):
         
         bucket, dir_key = self._split_s3_path_to_bucket_and_key(remote_path)
         if "ldata-managed" in bucket:
+            print("downloading dir from ldata-managed")
             if dir_key[-1] != "/":
                 dir_key += "/"
 
@@ -161,8 +162,12 @@ class AwsS3Proxy(_common_data.DataProxy):
             key_to_url_map = r.json()["key_to_url_map"]
             for key, url in key_to_url_map.items():
                 local_file_path = _os.path.join(local_path, key.replace(dir_key, ""))
+                print(local_file_path)
+                print(key)
                 _os.makedirs(local_file_path, exist_ok=True)
                 urllib.urlretrieve(url, local_file_path)
+                assert _os.path.exists(local_file_path)
+            return True
         else:
             AwsS3Proxy._check_binary()
             cmd = [AwsS3Proxy._AWS_CLI, "s3", "cp", "--recursive", remote_path, local_path]
@@ -180,12 +185,16 @@ class AwsS3Proxy(_common_data.DataProxy):
         bucket, __ = self._split_s3_path_to_bucket_and_key(remote_path)
 
         if "ldata-managed" in bucket:
+            print("downloading file from ldata-managed")
             r = requests.post(self._latch_endpoint + "/api/get-presigned-url", json={"object_url": remote_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
             if r.status_code != 200:
-                raise _FlyteUserException("failed to download `{}`".format(remote_path))
+                raise _FlyteUserException("failed to get presigned url for `{}`".format(remote_path))
             
             url = r.json()["url"]
             urllib.urlretrieve(url, local_path)
+            print(local_path)
+            print(_os.path.exists(local_path))
+            return _os.path.exists(local_path)
         else:
             AwsS3Proxy._check_binary()
             cmd = [AwsS3Proxy._AWS_CLI, "s3", "cp", remote_path, local_path]
@@ -200,6 +209,7 @@ class AwsS3Proxy(_common_data.DataProxy):
         bucket, __ = self._split_s3_path_to_bucket_and_key(to_path)
 
         if "ldata-managed" in bucket:
+            print("uploading file to ldata-managed")
             r = requests.post(self._latch_endpoint + "/api/get-upload-url", json={"object_url": to_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
             if r.status_code != 200:
                 raise _FlyteUserException("failed to get presigned upload url for `{}`".format(to_path))
@@ -209,6 +219,7 @@ class AwsS3Proxy(_common_data.DataProxy):
             r = requests.post(data["url"], data=data["fields"], files=files)
             if r.status_code != 200:
                 raise _FlyteUserException("failed to upload `{}` to `{}`".format(file_path, data["url"]))
+            return True
         else:
             AwsS3Proxy._check_binary()
 
@@ -231,6 +242,7 @@ class AwsS3Proxy(_common_data.DataProxy):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format s3://...")
 
         if "ldata-managed" in remote_path:
+            print("uploading directory to ldata-managed")
             r = requests.post(self._latch_endpoint + "/api/get-upload-url-for-dir", json={"object_url": remote_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
             if r.status_code != 200:
                 raise _FlyteUserException("failed to get presigned upload url for `{}`".format(remote_path))
@@ -245,6 +257,7 @@ class AwsS3Proxy(_common_data.DataProxy):
                 r = requests.post(url, data=fields, files={ "file": open(file_to_upload, "rb")})
                 if r.status_code != 200:
                     raise _FlyteUserException("failed to upload `{}` to `{}`".format(file_to_upload, url))
+            return True
         else:
             extra_args = {
                 "ACL": "bucket-owner-full-control",
