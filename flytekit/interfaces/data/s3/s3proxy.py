@@ -82,6 +82,14 @@ class AwsS3Proxy(_common_data.DataProxy):
         return self._raw_output_data_prefix_override
 
     @staticmethod
+    def _check_binary():
+        """
+        Make sure that the AWS cli is present
+        """
+        if not _which(AwsS3Proxy._AWS_CLI):
+            raise _FlyteUserException("AWS CLI not found at Please install.")
+
+    @staticmethod
     def _split_s3_path_to_bucket_and_key(path):
         """
         :param Text path:
