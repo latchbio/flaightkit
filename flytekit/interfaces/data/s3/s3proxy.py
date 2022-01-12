@@ -218,7 +218,7 @@ class AwsS3Proxy(_common_data.DataProxy):
             files = { "file": open(file_path, "rb")}
             r = requests.post(data["url"], data=data["fields"], files=files)
             if r.status_code != 200:
-                raise _FlyteUserException("failed to upload `{}` to `{}`".format(file_path, data["url"]))
+                raise _FlyteUserException("failed to upload `{}` to `{}`, error: `{}: {}`".format(file_path, data["url"], r.status_code, r.text))
             return True
         else:
             AwsS3Proxy._check_binary()
