@@ -6,7 +6,8 @@ import sys as _sys
 import time
 import uuid as _uuid
 from typing import Dict, List
-
+import requests
+import urllib
 from six import moves as _six_moves
 from six import text_type as _text_type
 
@@ -14,54 +15,11 @@ from flytekit.common.exceptions.user import FlyteUserException as _FlyteUserExce
 from flytekit.configuration import aws as _aws_config
 from flytekit.interfaces import random as _flyte_random
 from flytekit.interfaces.data import common as _common_data
-from flytekit.tools import subprocess as _subprocess
 
 if _sys.version_info >= (3,):
     from shutil import which as _which
 else:
     from distutils.spawn import find_executable as _which
-
-
-def _update_cmd_config_and_execute(cmd: List[str]):
-    env = _os.environ.copy()
-
-    if _aws_config.ENABLE_DEBUG.get():
-        cmd.insert(1, "--debug")
-
-    if _aws_config.S3_ENDPOINT.get() is not None:
-        cmd.insert(1, _aws_config.S3_ENDPOINT.get())
-        cmd.insert(1, _aws_config.S3_ENDPOINT_ARG_NAME)
-
-    if _aws_config.S3_ACCESS_KEY_ID.get() is not None:
-        env[_aws_config.S3_ACCESS_KEY_ID_ENV_NAME] = _aws_config.S3_ACCESS_KEY_ID.get()
-
-    if _aws_config.S3_SECRET_ACCESS_KEY.get() is not None:
-        env[_aws_config.S3_SECRET_ACCESS_KEY_ENV_NAME] = _aws_config.S3_SECRET_ACCESS_KEY.get()
-
-    retry = 0
-    while True:
-        try:
-            return _subprocess.check_call(cmd, env=env)
-        except Exception as e:
-            logging.error(f"Exception when trying to execute {cmd}, reason: {str(e)}")
-            retry += 1
-            if retry > _aws_config.RETRIES.get():
-                raise
-            secs = _aws_config.BACKOFF_SECONDS.get()
-            logging.info(f"Sleeping before retrying again, after {secs} seconds")
-            time.sleep(secs)
-            logging.info("Retrying again")
-
-
-def _extra_args(extra_args: Dict[str, str]) -> List[str]:
-    cmd = []
-    if "ContentType" in extra_args:
-        cmd += ["--content-type", extra_args["ContentType"]]
-    if "ContentEncoding" in extra_args:
-        cmd += ["--content-encoding", extra_args["ContentEncoding"]]
-    if "ACL" in extra_args:
-        cmd += ["--acl", extra_args["ACL"]]
-    return cmd
 
 
 class AwsS3Proxy(_common_data.DataProxy):
@@ -76,18 +34,11 @@ class AwsS3Proxy(_common_data.DataProxy):
             path passed in is correct. That is, an S3 path won't be passed in when running on GCP.
         """
         self._raw_output_data_prefix_override = raw_output_data_prefix_override
+        self._latch_endpoint = _os.environ.get("LATCH_AUTHENTICATION_ENDPOINT")
 
     @property
     def raw_output_data_prefix_override(self) -> str:
         return self._raw_output_data_prefix_override
-
-    @staticmethod
-    def _check_binary():
-        """
-        Make sure that the AWS cli is present
-        """
-        if not _which(AwsS3Proxy._AWS_CLI):
-            raise _FlyteUserException("AWS CLI not found at Please install.")
 
     @staticmethod
     def _split_s3_path_to_bucket_and_key(path):
@@ -104,46 +55,38 @@ class AwsS3Proxy(_common_data.DataProxy):
         :param Text remote_path: remote s3:// path
         :rtype bool: whether the s3 file exists or not
         """
-        AwsS3Proxy._check_binary()
 
         if not remote_path.startswith("s3://"):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format s3://...")
 
-        bucket, file_path = self._split_s3_path_to_bucket_and_key(remote_path)
-        cmd = [
-            AwsS3Proxy._AWS_CLI,
-            "s3api",
-            "head-object",
-            "--bucket",
-            bucket,
-            "--key",
-            file_path,
-        ]
-        try:
-            _update_cmd_config_and_execute(cmd)
-            return True
-        except Exception as ex:
-            # The s3api command returns an error if the object does not exist. The error message contains
-            # the http status code: "An error occurred (404) when calling the HeadObject operation: Not Found"
-            #  This is a best effort for returning if the object does not exist by searching
-            # for existence of (404) in the error message. This should not be needed when we get off the cli and use lib
-            if _re.search("(404)", _text_type(ex)):
-                return False
-            else:
-                raise ex
+        r = requests.post(self._latch_endpoint + "/api/object-exists-at-url", json={"object_url": remote_path, "project_name_claim": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        if r.status_code != 200:
+            raise _FlyteUserException("failed to check if object exists at url `{}`".format(remote_path))
+        
+        return r.json()["exists"]
 
     def download_directory(self, remote_path, local_path):
         """
         :param Text remote_path: remote s3:// path
         :param Text local_path: directory to copy to
         """
-        AwsS3Proxy._check_binary()
 
         if not remote_path.startswith("s3://"):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format s3://...")
+        
+        __, dir_key = self._split_s3_path_to_bucket_and_key(remote_path)
+        if dir_key[-1] != "/":
+            dir_key += "/"
 
-        cmd = [AwsS3Proxy._AWS_CLI, "s3", "cp", "--recursive", remote_path, local_path]
-        return _update_cmd_config_and_execute(cmd)
+        r = requests.post(self._latch_endpoint + "/api/get-presigned-urls-for-dir", json={"object_url": remote_path, "project_name_claim": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        if r.status_code != 200:
+            raise _FlyteUserException("failed to download `{}`".format(remote_path))
+        
+        key_to_url_map = r.json()["key_to_url_map"]
+        for key, url in key_to_url_map.items():
+            local_file_path = _os.path.join(local_path, key.replace(dir_key, ""))
+            _os.makedirs(local_file_path, exist_ok=True)
+            urllib.urlretrieve(url, local_file_path)
 
     def download(self, remote_path, local_path):
         """
@@ -153,44 +96,53 @@ class AwsS3Proxy(_common_data.DataProxy):
         if not remote_path.startswith("s3://"):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format s3://...")
 
-        AwsS3Proxy._check_binary()
-        cmd = [AwsS3Proxy._AWS_CLI, "s3", "cp", remote_path, local_path]
-        return _update_cmd_config_and_execute(cmd)
+        r = requests.post(self._latch_endpoint + "/api/get-presigned-url", json={"object_url": remote_path, "project_name_claim": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        if r.status_code != 200:
+            raise _FlyteUserException("failed to download `{}`".format(remote_path))
+        
+        url = r.json()["url"]
+        urllib.urlretrieve(url, local_path)
 
     def upload(self, file_path, to_path):
         """
         :param Text file_path:
         :param Text to_path:
         """
-        AwsS3Proxy._check_binary()
 
-        extra_args = {
-            "ACL": "bucket-owner-full-control",
-        }
+        r = requests.post(self._latch_endpoint + "/api/get-upload-url", json={"object_url": to_path, "project_name_claim": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        if r.status_code != 200:
+            raise _FlyteUserException("failed to get presigned upload url for `{}`".format(to_path))
 
-        cmd = [AwsS3Proxy._AWS_CLI, "s3", "cp"]
-        cmd.extend(_extra_args(extra_args))
-        cmd += [file_path, to_path]
-
-        return _update_cmd_config_and_execute(cmd)
+        data = r.json()
+        files = { "file": open(file_path, "rb")}
+        r = requests.post(data["url"], data=data["fields"], files=files)
+        if r.status_code != 200:
+            raise _FlyteUserException("failed to upload `{}` to `{}`".format(file_path, data["url"]))
 
     def upload_directory(self, local_path, remote_path):
         """
         :param Text local_path:
         :param Text remote_path:
         """
-        extra_args = {
-            "ACL": "bucket-owner-full-control",
-        }
 
         if not remote_path.startswith("s3://"):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format s3://...")
 
-        AwsS3Proxy._check_binary()
-        cmd = [AwsS3Proxy._AWS_CLI, "s3", "cp", "--recursive"]
-        cmd.extend(_extra_args(extra_args))
-        cmd += [local_path, remote_path]
-        return _update_cmd_config_and_execute(cmd)
+        r = requests.post(self._latch_endpoint + "/api/get-upload-url-for-dir", json={"object_url": remote_path, "project_name_claim": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        if r.status_code != 200:
+            raise _FlyteUserException("failed to get presigned upload url for `{}`".format(remote_path))
+        
+        url = r.json()["url"]
+
+        files_to_upload = [_os.path.join(dp, f) for dp, __, filenames in _os.walk(local_path) for f in filenames]
+
+        for file_to_upload in files_to_upload:
+            fields = r.json()["fields"]
+            fields["key"] = file_to_upload.replace(local_path, "")
+            r = requests.post(url, data=fields, files={ "file": open(file_to_upload, "rb")})
+            if r.status_code != 200:
+                raise _FlyteUserException("failed to upload `{}` to `{}`".format(file_to_upload, url))
+
 
     def get_random_path(self):
         """

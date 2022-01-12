@@ -21,3 +21,5 @@ ENABLE_DEBUG = _config_common.FlyteBoolConfigurationEntry("aws", "enable_debug",
 RETRIES = _config_common.FlyteIntegerConfigurationEntry("aws", "retries", default=3)
 
 BACKOFF_SECONDS = _config_common.FlyteIntegerConfigurationEntry("aws", "backoff_seconds", default=5)
+
+S3_LATCH_AUTHENTICATION_ENDPOINT = "LATCH_AUTHENTICATION_ENDPOINT"
