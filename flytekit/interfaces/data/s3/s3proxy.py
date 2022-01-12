@@ -166,9 +166,11 @@ class AwsS3Proxy(_common_data.DataProxy):
             key_to_url_map = r.json()["key_to_url_map"]
             for key, url in key_to_url_map.items():
                 local_file_path = _os.path.join(local_path, key.replace(dir_key, ""))
-                print(local_file_path)
+                dir = "/".join(local_file_path.split("/")[:-1])
                 print(key)
-                _os.makedirs(local_file_path, exist_ok=True)
+                print(dir)
+                print(local_file_path)
+                _os.makedirs(dir, exist_ok=True)
                 urllib.request.urlretrieve(url, local_file_path)
                 assert _os.path.exists(local_file_path)
             return True
