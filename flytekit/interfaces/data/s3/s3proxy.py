@@ -165,7 +165,7 @@ class AwsS3Proxy(_common_data.DataProxy):
                 print(local_file_path)
                 print(key)
                 _os.makedirs(local_file_path, exist_ok=True)
-                urllib.urlretrieve(url, local_file_path)
+                urllib.request.urlretrieve(url, local_file_path)
                 assert _os.path.exists(local_file_path)
             return True
         else:
@@ -191,7 +191,7 @@ class AwsS3Proxy(_common_data.DataProxy):
                 raise _FlyteUserException("failed to get presigned url for `{}`".format(remote_path))
             
             url = r.json()["url"]
-            urllib.urlretrieve(url, local_path)
+            urllib.request.urlretrieve(url, local_path)
             print(local_path)
             print(_os.path.exists(local_path))
             return _os.path.exists(local_path)
