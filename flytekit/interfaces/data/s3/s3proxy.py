@@ -20,7 +20,7 @@ from flytekit.interfaces import random as _flyte_random
 from flytekit.interfaces.data import common as _common_data
 from flytekit.tools import subprocess as _subprocess
 
-CHUNK_SIZE = 10000
+CHUNK_SIZE = 10000000
 
 if _sys.version_info >= (3,):
     from shutil import which as _which
