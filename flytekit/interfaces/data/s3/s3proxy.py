@@ -7,7 +7,10 @@ import time
 import uuid as _uuid
 from typing import Dict, List
 import requests
+import mimetypes
 import urllib
+import math
+
 from six import moves as _six_moves
 from six import text_type as _text_type
 
@@ -17,6 +20,7 @@ from flytekit.interfaces import random as _flyte_random
 from flytekit.interfaces.data import common as _common_data
 from flytekit.tools import subprocess as _subprocess
 
+CHUNK_SIZE = 10000
 
 if _sys.version_info >= (3,):
     from shutil import which as _which
@@ -210,17 +214,33 @@ class AwsS3Proxy(_common_data.DataProxy):
 
         if "ldata-managed" in bucket:
             print("uploading file to ldata-managed")
-            r = requests.post(self._latch_endpoint + "/api/get-upload-url", json={"object_url": to_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+            file_size = _os.path.getsize(file_path)
+            nrof_parts = math.ceil(float(file_size) / CHUNK_SIZE)
+            content_type = mimetypes.guess_type(file_path)[0]
+            if content_type is None:
+                content_type = "application/octet-stream"
+
+            r = requests.post(self._latch_endpoint + "/api/begin-upload", json={"object_url": to_path, "nrof_parts": nrof_parts, "content_type": content_type, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
             if r.status_code != 200:
-                raise _FlyteUserException("failed to get presigned upload url for `{}`".format(to_path))
-            print(to_path)
-            data = r.json()["res"]
-            files = { "file": open(file_path, "rb")}
-            r = requests.post(data["url"], data=data["fields"], files=files)
+                raise _FlyteUserException("failed to get presigned upload urls for `{}`".format(to_path))
+            
+            data = r.json()
+            presigned_urls = data["urls"]
+            upload_id = data["upload_id"]
+            f = open(file_path, "rb")
+            parts=[]
+            for key, val in presigned_urls.items():
+                index = int(key)
+                blob = f.read(CHUNK_SIZE)
+                r = requests.put(val, data=blob)
+                if r.status_code != 200:
+                    raise _FlyteUserException("failed to upload part `{}`".format(index))
+                etag = r.headers['ETag']
+                parts.append({'ETag': etag, 'PartNumber': index})
+            
+            r = requests.post(self._latch_endpoint + "/api/complete-upload", json={"upload_id": upload_id, "parts": parts, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
             if r.status_code != 200:
-                print(data['url'])
-                print(data['fields'])
-                raise _FlyteUserException("failed to upload `{}` to `{}`, error: `{}: {}`".format(file_path, data["url"], r.status_code, r.text))
+                raise _FlyteUserException("failed to get presigned upload urls for `{}`".format(to_path))
             return True
         else:
             AwsS3Proxy._check_binary()
