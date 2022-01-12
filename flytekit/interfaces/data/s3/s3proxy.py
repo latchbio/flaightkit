@@ -59,7 +59,7 @@ class AwsS3Proxy(_common_data.DataProxy):
         if not remote_path.startswith("s3://"):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format s3://...")
 
-        r = requests.post(self._latch_endpoint + "/api/object-exists-at-url", json={"object_url": remote_path, "project_name_claim": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        r = requests.post(self._latch_endpoint + "/api/object-exists-at-url", json={"object_url": remote_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to check if object exists at url `{}`".format(remote_path))
         
@@ -78,7 +78,7 @@ class AwsS3Proxy(_common_data.DataProxy):
         if dir_key[-1] != "/":
             dir_key += "/"
 
-        r = requests.post(self._latch_endpoint + "/api/get-presigned-urls-for-dir", json={"object_url": remote_path, "project_name_claim": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        r = requests.post(self._latch_endpoint + "/api/get-presigned-urls-for-dir", json={"object_url": remote_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to download `{}`".format(remote_path))
         
@@ -96,7 +96,7 @@ class AwsS3Proxy(_common_data.DataProxy):
         if not remote_path.startswith("s3://"):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format s3://...")
 
-        r = requests.post(self._latch_endpoint + "/api/get-presigned-url", json={"object_url": remote_path, "project_name_claim": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        r = requests.post(self._latch_endpoint + "/api/get-presigned-url", json={"object_url": remote_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to download `{}`".format(remote_path))
         
@@ -109,7 +109,7 @@ class AwsS3Proxy(_common_data.DataProxy):
         :param Text to_path:
         """
 
-        r = requests.post(self._latch_endpoint + "/api/get-upload-url", json={"object_url": to_path, "project_name_claim": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        r = requests.post(self._latch_endpoint + "/api/get-upload-url", json={"object_url": to_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to get presigned upload url for `{}`".format(to_path))
 
@@ -128,7 +128,7 @@ class AwsS3Proxy(_common_data.DataProxy):
         if not remote_path.startswith("s3://"):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format s3://...")
 
-        r = requests.post(self._latch_endpoint + "/api/get-upload-url-for-dir", json={"object_url": remote_path, "project_name_claim": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        r = requests.post(self._latch_endpoint + "/api/get-upload-url-for-dir", json={"object_url": remote_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to get presigned upload url for `{}`".format(remote_path))
         
