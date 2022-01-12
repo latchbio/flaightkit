@@ -238,7 +238,7 @@ class AwsS3Proxy(_common_data.DataProxy):
                 etag = r.headers['ETag']
                 parts.append({'ETag': etag, 'PartNumber': index})
             
-            r = requests.post(self._latch_endpoint + "/api/complete-upload", json={"upload_id": upload_id, "parts": parts, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+            r = requests.post(self._latch_endpoint + "/api/complete-upload", json={"upload_id": upload_id, "parts": parts, "object_url": to_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
             if r.status_code != 200:
                 raise _FlyteUserException("failed to get presigned upload urls for `{}`".format(to_path))
             return True
