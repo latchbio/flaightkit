@@ -214,7 +214,7 @@ class AwsS3Proxy(_common_data.DataProxy):
             if r.status_code != 200:
                 raise _FlyteUserException("failed to get presigned upload url for `{}`".format(to_path))
 
-            data = r.json()
+            data = r.json()["res"]
             files = { "file": open(file_path, "rb")}
             r = requests.post(data["url"], data=data["fields"], files=files)
             if r.status_code != 200:
@@ -247,16 +247,16 @@ class AwsS3Proxy(_common_data.DataProxy):
             if r.status_code != 200:
                 raise _FlyteUserException("failed to get presigned upload url for `{}`".format(remote_path))
             
-            url = r.json()["url"]
+            data = r.json()["res"]
 
             files_to_upload = [_os.path.join(dp, f) for dp, __, filenames in _os.walk(local_path) for f in filenames]
 
             for file_to_upload in files_to_upload:
-                fields = r.json()["fields"]
+                fields = data["fields"]
                 fields["key"] = file_to_upload.replace(local_path, "")
-                r = requests.post(url, data=fields, files={ "file": open(file_to_upload, "rb")})
+                r = requests.post(data["url"], data=fields, files={ "file": open(file_to_upload, "rb")})
                 if r.status_code != 200:
-                    raise _FlyteUserException("failed to upload `{}` to `{}`".format(file_to_upload, url))
+                    raise _FlyteUserException("failed to upload `{}` to `{}`".format(file_to_upload, data["url"]))
             return True
         else:
             extra_args = {
