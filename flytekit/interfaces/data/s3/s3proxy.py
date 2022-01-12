@@ -230,17 +230,17 @@ class AwsS3Proxy(_common_data.DataProxy):
             f = open(file_path, "rb")
             parts=[]
             for key, val in presigned_urls.items():
-                index = int(key)
+                print(key)
                 blob = f.read(CHUNK_SIZE)
                 r = requests.put(val, data=blob)
                 if r.status_code != 200:
-                    raise _FlyteUserException("failed to upload part `{}`".format(index))
+                    raise _FlyteUserException("failed to upload part `{}`".format(key))
                 etag = r.headers['ETag']
-                parts.append({'ETag': etag, 'PartNumber': index})
+                parts.append({'ETag': etag, 'PartNumber': int(key) + 1})
             
             r = requests.post(self._latch_endpoint + "/api/complete-upload", json={"upload_id": upload_id, "parts": parts, "object_url": to_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
             if r.status_code != 200:
-                raise _FlyteUserException("failed to get presigned upload urls for `{}`".format(to_path))
+                raise _FlyteUserException("failed to complete upload for `{}`".format(to_path))
             return True
         else:
             AwsS3Proxy._check_binary()
