@@ -213,7 +213,7 @@ class AwsS3Proxy(_common_data.DataProxy):
             r = requests.post(self._latch_endpoint + "/api/get-upload-url", json={"object_url": to_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
             if r.status_code != 200:
                 raise _FlyteUserException("failed to get presigned upload url for `{}`".format(to_path))
-
+            print(to_path)
             data = r.json()["res"]
             files = { "file": open(file_path, "rb")}
             r = requests.post(data["url"], data=data["fields"], files=files)
