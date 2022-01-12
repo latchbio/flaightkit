@@ -16,10 +16,10 @@ S3_SECRET_ACCESS_KEY_ENV_NAME = "AWS_SECRET_ACCESS_KEY"
 
 S3_ENDPOINT_ARG_NAME = "--endpoint-url"
 
+S3_LATCH_AUTHENTICATION_ENDPOINT = _config_common.FlyteStringConfigurationEntry("aws", "latch_authentication_endpoint", default="https://nucleus.latch.bio")
+
 ENABLE_DEBUG = _config_common.FlyteBoolConfigurationEntry("aws", "enable_debug", default=False)
 
 RETRIES = _config_common.FlyteIntegerConfigurationEntry("aws", "retries", default=3)
 
 BACKOFF_SECONDS = _config_common.FlyteIntegerConfigurationEntry("aws", "backoff_seconds", default=5)
-
-S3_LATCH_AUTHENTICATION_ENDPOINT = "LATCH_AUTHENTICATION_ENDPOINT"

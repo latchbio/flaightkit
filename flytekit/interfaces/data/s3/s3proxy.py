@@ -34,7 +34,7 @@ class AwsS3Proxy(_common_data.DataProxy):
             path passed in is correct. That is, an S3 path won't be passed in when running on GCP.
         """
         self._raw_output_data_prefix_override = raw_output_data_prefix_override
-        self._latch_endpoint = _os.environ.get("LATCH_AUTHENTICATION_ENDPOINT")
+        self._latch_endpoint = _aws_config.S3_LATCH_AUTHENTICATION_ENDPOINT.get()
 
     @property
     def raw_output_data_prefix_override(self) -> str:
