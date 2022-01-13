@@ -20,8 +20,6 @@ from flytekit.interfaces import random as _flyte_random
 from flytekit.interfaces.data import common as _common_data
 from flytekit.tools import subprocess as _subprocess
 
-CHUNK_SIZE = 10000000
-
 if _sys.version_info >= (3,):
     from shutil import which as _which
 else:
@@ -67,6 +65,11 @@ def _extra_args(extra_args: Dict[str, str]) -> List[str]:
         cmd += ["--acl", extra_args["ACL"]]
     return cmd
 
+def _enforce_trailing_slash(path: str):
+    if path[-1] != "/":
+        path += "/"
+    return path
+
 class AwsS3Proxy(_common_data.DataProxy):
     _AWS_CLI = "aws"
     _SHARD_CHARACTERS = [_text_type(x) for x in _six_moves.range(10)] + list(_string.ascii_lowercase)
@@ -80,6 +83,14 @@ class AwsS3Proxy(_common_data.DataProxy):
         """
         self._raw_output_data_prefix_override = raw_output_data_prefix_override
         self._latch_endpoint = _aws_config.S3_LATCH_AUTHENTICATION_ENDPOINT.get()
+        if self._latch_endpoint is None:
+            raise ValueError("S3_LATCH_AUTHENTICATION_ENDPOINT must be set")
+        self._chunk_size = _aws_config.S3_UPLOAD_CHUNK_SIZE_BYTES.get()
+        if self._chunk_size is None:
+            raise ValueError("S3_UPLOAD_CHUNK_SIZE_BYTES must be set")
+        self._flyte_bucket = _aws_config.S3_FLYTE_BUCKET.get()
+        if self._flyte_bucket is None:
+            raise ValueError("S3_FLYTE_BUCKET must be set")
 
     @property
     def raw_output_data_prefix_override(self) -> str:
@@ -113,7 +124,7 @@ class AwsS3Proxy(_common_data.DataProxy):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format s3://...")
 
         bucket, file_path = self._split_s3_path_to_bucket_and_key(remote_path)
-        if "ldata-managed" in bucket:
+        if bucket != self._flyte_bucket:
             r = requests.post(self._latch_endpoint + "/api/object-exists-at-url", json={"object_url": remote_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
             if r.status_code != 200:
                 raise _FlyteUserException("failed to check if object exists at url `{}`".format(remote_path))
@@ -154,10 +165,8 @@ class AwsS3Proxy(_common_data.DataProxy):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format s3://...")
         
         bucket, dir_key = self._split_s3_path_to_bucket_and_key(remote_path)
-        if "ldata-managed" in bucket:
-            print("downloading dir from ldata-managed")
-            if dir_key[-1] != "/":
-                dir_key += "/"
+        if bucket != self._flyte_bucket:
+            dir_key = _enforce_trailing_slash(dir_key)
 
             r = requests.post(self._latch_endpoint + "/api/get-presigned-urls-for-dir", json={"object_url": remote_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
             if r.status_code != 200:
@@ -167,9 +176,6 @@ class AwsS3Proxy(_common_data.DataProxy):
             for key, url in key_to_url_map.items():
                 local_file_path = _os.path.join(local_path, key.replace(dir_key, "", 1))
                 dir = "/".join(local_file_path.split("/")[:-1])
-                print(key)
-                print(dir)
-                print(local_file_path)
                 _os.makedirs(dir, exist_ok=True)
                 urllib.request.urlretrieve(url, local_file_path)
                 assert _os.path.exists(local_file_path)
@@ -190,16 +196,13 @@ class AwsS3Proxy(_common_data.DataProxy):
 
         bucket, __ = self._split_s3_path_to_bucket_and_key(remote_path)
 
-        if "ldata-managed" in bucket:
-            print("downloading file from ldata-managed")
+        if bucket != self._flyte_bucket:
             r = requests.post(self._latch_endpoint + "/api/get-presigned-url", json={"object_url": remote_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
             if r.status_code != 200:
                 raise _FlyteUserException("failed to get presigned url for `{}`".format(remote_path))
             
             url = r.json()["url"]
             urllib.request.urlretrieve(url, local_path)
-            print(local_path)
-            print(_os.path.exists(local_path))
             return _os.path.exists(local_path)
         else:
             AwsS3Proxy._check_binary()
@@ -214,10 +217,9 @@ class AwsS3Proxy(_common_data.DataProxy):
 
         bucket, __ = self._split_s3_path_to_bucket_and_key(to_path)
 
-        if "ldata-managed" in bucket:
-            print("uploading file to ldata-managed")
+        if bucket != self._flyte_bucket:
             file_size = _os.path.getsize(file_path)
-            nrof_parts = math.ceil(float(file_size) / CHUNK_SIZE)
+            nrof_parts = math.ceil(float(file_size) / self._chunk_size)
             content_type = mimetypes.guess_type(file_path)[0]
             if content_type is None:
                 content_type = "application/octet-stream"
@@ -232,11 +234,10 @@ class AwsS3Proxy(_common_data.DataProxy):
             f = open(file_path, "rb")
             parts=[]
             for key, val in presigned_urls.items():
-                print(key)
-                blob = f.read(CHUNK_SIZE)
+                blob = f.read(self._chunk_size)
                 r = requests.put(val, data=blob)
                 if r.status_code != 200:
-                    raise _FlyteUserException("failed to upload part `{}`".format(key))
+                    raise _FlyteUserException("failed to upload part `{}` of file `{}`".format(key, file_path))
                 etag = r.headers['ETag']
                 parts.append({'ETag': etag, 'PartNumber': int(key) + 1})
             
@@ -264,20 +265,19 @@ class AwsS3Proxy(_common_data.DataProxy):
         """
         if not remote_path.startswith("s3://"):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format s3://...")
-        if local_path[-1] != "/":
-            local_path = local_path + "/"
-        if remote_path[-1] != "/":
-            remote_path = remote_path + "/"
-        if "ldata-managed" in remote_path:
-            print("uploading directory to ldata-managed")
+
+        bucket, __ = self._split_s3_path_to_bucket_and_key(remote_path)
+
+        # ensure formatting
+        local_path = _enforce_trailing_slash(local_path)
+        remote_path = _enforce_trailing_slash(remote_path)
+
+        if bucket != self._flyte_bucket:
             files_to_upload = [_os.path.join(dp, f) for dp, __, filenames in _os.walk(local_path) for f in filenames]
-            print(files_to_upload)
             for file_path in files_to_upload:
                 relative_name = file_path.replace(local_path, "", 1)
                 if relative_name.startswith("/"):
                     relative_name = relative_name[1:]
-                print(file_path)
-                print(remote_path + relative_name)
                 self.upload(file_path, remote_path + relative_name)
             return True
         else:
