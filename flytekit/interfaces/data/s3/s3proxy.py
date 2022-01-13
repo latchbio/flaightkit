@@ -165,7 +165,7 @@ class AwsS3Proxy(_common_data.DataProxy):
             
             key_to_url_map = r.json()["key_to_url_map"]
             for key, url in key_to_url_map.items():
-                local_file_path = _os.path.join(local_path, key.replace(dir_key, ""))
+                local_file_path = _os.path.join(local_path, key.replace(dir_key, "", 1))
                 dir = "/".join(local_file_path.split("/")[:-1])
                 print(key)
                 print(dir)
@@ -264,23 +264,21 @@ class AwsS3Proxy(_common_data.DataProxy):
         """
         if not remote_path.startswith("s3://"):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format s3://...")
-
+        if local_path[-1] != "/":
+            local_path = local_path + "/"
+        if remote_path[-1] != "/":
+            remote_path = remote_path + "/"
         if "ldata-managed" in remote_path:
             print("uploading directory to ldata-managed")
-            r = requests.post(self._latch_endpoint + "/api/get-upload-url-for-dir", json={"object_url": remote_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
-            if r.status_code != 200:
-                raise _FlyteUserException("failed to get presigned upload url for `{}`".format(remote_path))
-            
-            data = r.json()["res"]
-
             files_to_upload = [_os.path.join(dp, f) for dp, __, filenames in _os.walk(local_path) for f in filenames]
-
-            for file_to_upload in files_to_upload:
-                fields = data["fields"]
-                fields["key"] = file_to_upload.replace(local_path, "")
-                r = requests.post(data["url"], data=fields, files={ "file": open(file_to_upload, "rb")})
-                if r.status_code != 200:
-                    raise _FlyteUserException("failed to upload `{}` to `{}`".format(file_to_upload, data["url"]))
+            print(files_to_upload)
+            for file_path in files_to_upload:
+                relative_name = file_path.replace(local_path, "", 1)
+                if relative_name.startswith("/"):
+                    relative_name = relative_name[1:]
+                print(file_path)
+                print(remote_path + relative_name)
+                self.upload(file_path, remote_path + relative_name)
             return True
         else:
             extra_args = {
