@@ -52,7 +52,7 @@ class LatchProxy(_common_data.DataProxy):
         if not remote_path.startswith("latch://"):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format latch://...")
 
-        r = requests.post(self._latch_endpoint + "/api/object-exists-at-url", json={"object_url": remote_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        r = requests.post(self._latch_endpoint + "/api/object-exists-at-url", json={"object_url": remote_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to check if object exists at url `{}`".format(remote_path))
         
@@ -71,7 +71,7 @@ class LatchProxy(_common_data.DataProxy):
         bucket, dir_key = self._split_s3_path_to_bucket_and_key(remote_path)
         dir_key = _enforce_trailing_slash(dir_key)
 
-        r = requests.post(self._latch_endpoint + "/api/get-presigned-urls-for-dir", json={"object_url": remote_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        r = requests.post(self._latch_endpoint + "/api/get-presigned-urls-for-dir", json={"object_url": remote_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to download `{}`".format(remote_path))
         
@@ -93,7 +93,7 @@ class LatchProxy(_common_data.DataProxy):
         if not remote_path.startswith("latch://"):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format latch://...")
 
-        r = requests.post(self._latch_endpoint + "/api/get-presigned-url", json={"object_url": remote_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        r = requests.post(self._latch_endpoint + "/api/get-presigned-url", json={"object_url": remote_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to get presigned url for `{}`".format(remote_path))
         
@@ -113,7 +113,7 @@ class LatchProxy(_common_data.DataProxy):
         if content_type is None:
             content_type = "application/octet-stream"
 
-        r = requests.post(self._latch_endpoint + "/api/begin-upload", json={"object_url": to_path, "nrof_parts": nrof_parts, "content_type": content_type, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        r = requests.post(self._latch_endpoint + "/api/begin-upload", json={"object_url": to_path, "nrof_parts": nrof_parts, "content_type": content_type, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to get presigned upload urls for `{}`".format(to_path))
         
@@ -130,7 +130,7 @@ class LatchProxy(_common_data.DataProxy):
             etag = r.headers['ETag']
             parts.append({'ETag': etag, 'PartNumber': int(key) + 1})
         
-        r = requests.post(self._latch_endpoint + "/api/complete-upload", json={"upload_id": upload_id, "parts": parts, "object_url": to_path, "project_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_PROJECT")})
+        r = requests.post(self._latch_endpoint + "/api/complete-upload", json={"upload_id": upload_id, "parts": parts, "object_url": to_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to complete upload for `{}`".format(to_path))
         return True
