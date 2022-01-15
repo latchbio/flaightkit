@@ -16,12 +16,6 @@ S3_SECRET_ACCESS_KEY_ENV_NAME = "AWS_SECRET_ACCESS_KEY"
 
 S3_ENDPOINT_ARG_NAME = "--endpoint-url"
 
-S3_LATCH_AUTHENTICATION_ENDPOINT = _config_common.FlyteStringConfigurationEntry("aws", "latch_authentication_endpoint", default="https://nucleus.latch.bio")
-
-S3_FLYTE_BUCKET = _config_common.FlyteStringConfigurationEntry("aws", "flyte_bucket", default="prod-borg-prod")
-
-S3_UPLOAD_CHUNK_SIZE_BYTES = _config_common.FlyteIntegerConfigurationEntry("aws", "upload_chunk_size_bytes", default=10000000)
-
 ENABLE_DEBUG = _config_common.FlyteBoolConfigurationEntry("aws", "enable_debug", default=False)
 
 RETRIES = _config_common.FlyteIntegerConfigurationEntry("aws", "retries", default=3)
