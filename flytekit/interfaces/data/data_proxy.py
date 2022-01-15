@@ -9,6 +9,7 @@ from flytekit.common.exceptions import user as _user_exception
 from flytekit.configuration import platform as _platform_config
 from flytekit.configuration import sdk as _sdk_config
 from flytekit.interfaces.data.gcs import gcs_proxy as _gcs_proxy
+from flytekit.interfaces.data.latch import latch_proxy as _latch_proxy
 from flytekit.interfaces.data.http import http_data_proxy as _http_data_proxy
 from flytekit.interfaces.data.local import local_file_proxy as _local_file_proxy
 from flytekit.interfaces.data.s3 import s3proxy as _s3proxy
@@ -86,6 +87,7 @@ class RemoteDataContext(_OutputDataContext):
 class Data(object):
     # TODO: More proxies for more environments.
     _DATA_PROXIES = {
+        "latch:/": _latch_proxy.LatchProxy(),
         "s3:/": _s3proxy.AwsS3Proxy(),
         "gs:/": _gcs_proxy.GCSProxy(),
         "http://": _http_data_proxy.HttpFileProxy(),
@@ -194,6 +196,7 @@ class FileAccessProvider(object):
         self._local = _local_file_proxy.LocalFileProxy(local_sandbox_dir_appended)
 
         # Remote/cloud stuff
+        self._latch = _latch_proxy.LatchProxy
         if isinstance(remote_proxy, _s3proxy.AwsS3Proxy):
             self._aws = remote_proxy
         if isinstance(remote_proxy, _gcs_proxy.GCSProxy):
@@ -219,6 +222,8 @@ class FileAccessProvider(object):
         :param Text path:
         :rtype: flytekit.interfaces.data.common.DataProxy
         """
+        if path.startswith("latch:/"):
+            return self.latch
         if path.startswith("s3:/"):
             return self.aws
         elif path.startswith("gs:/"):
@@ -232,6 +237,10 @@ class FileAccessProvider(object):
             # Note that we default to the local one here, not the remote one.
             return self.local_access
         raise Exception(f"Unknown file access {path}")
+
+    @property
+    def latch(self) -> _latch_proxy.LatchProxy:
+        return self._latch
 
     @property
     def aws(self) -> _s3proxy.AwsS3Proxy:
