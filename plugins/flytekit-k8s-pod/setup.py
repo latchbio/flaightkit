@@ -5,7 +5,7 @@ PLUGIN_NAME = "pod"
 microlib_name = f"flytekitplugins-{PLUGIN_NAME}"
 
 plugin_requires = [
-    "flytekit>=0.16.0b0,<1.0.0",
+    "flytekit @ git+ssh://git@github.com/latchbio/flaightkit",
     "kubernetes>=12.0.1",
 ]
 
