@@ -43,16 +43,16 @@ extras_require = {
     "all": spark3 + all_but_spark,
 }
 
-__version__ = "0.0.0+develop"
+__version__ = os.environ.get("VERSION", "0.0.0+develop")
 
 setup(
-    name="flytekit",
+    name="flaightkit",
     version=__version__,
-    maintainer="Flyte Org",
-    maintainer_email="admin@flyte.org",
+    maintainer="maximsmol",
+    maintainer_email="max@latch.bio",
     packages=find_packages(exclude=["tests*"]),
-    url="https://github.com/lyft/flytekit",
-    description="Flyte SDK for Python",
+    url="",
+    description="Flyte SDK for Python (Latch fork)",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     entry_points={
@@ -65,7 +65,7 @@ setup(
         ]
     },
     install_requires=[
-        f"flyteidl {os.environ.get('FLYTEIDL_VERSION', '@ git+ssh://git@github.com/latchbio/flaightidl')}",
+        "flaightidl==0.1.1",
         "wheel>=0.30.0,<1.0.0",
         "pandas>=1.0.0,<1.4.0",
         "pyarrow>=2.0.0,<4.0.0",
