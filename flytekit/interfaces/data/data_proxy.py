@@ -322,6 +322,8 @@ class FileAccessProvider(object):
         :param Text remote_path: remote s3:// path
         :param Text local_path: directory to copy to
         """
+        print("before inner download")
+        print(self._get_data_proxy_by_path(remote_path))
         return self._get_data_proxy_by_path(remote_path).download(remote_path, local_path)
 
     def upload(self, file_path: str, to_path: str):
@@ -352,6 +354,7 @@ class FileAccessProvider(object):
                 if is_multipart:
                     self.download_directory(remote_path, local_path)
                 else:
+                    print("before download")
                     self.download(remote_path, local_path)
         except Exception as ex:
             raise _user_exception.FlyteAssertion(

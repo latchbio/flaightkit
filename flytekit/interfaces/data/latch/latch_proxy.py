@@ -89,9 +89,11 @@ class LatchProxy(_common_data.DataProxy):
         :param Text remote_path: remote latch:// path
         :param Text local_path: directory to copy to
         """
+        print(remote_path)
+        print(local_path)
 
         if not remote_path.startswith("latch://"):
-            raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format latch://...")
+            raise ValueError("Not a Latch ARN. Please use ARN of the format latch://...")
 
         r = requests.post(self._latch_endpoint + "/api/get-presigned-url", json={"object_url": remote_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
@@ -106,7 +108,8 @@ class LatchProxy(_common_data.DataProxy):
         :param Text file_path:
         :param Text to_path:
         """
-
+        print(file_path)
+        print(to_path)
         file_size = _os.path.getsize(file_path)
         nrof_parts = math.ceil(float(file_size) / self._chunk_size)
         content_type = mimetypes.guess_type(file_path)[0]
@@ -140,6 +143,8 @@ class LatchProxy(_common_data.DataProxy):
         :param Text local_path:
         :param Text remote_path:
         """
+        print(remote_path)
+        print(local_path)
         if not remote_path.startswith("latch://"):
             raise ValueError("Not a Latch ARN. Please use FQN (Latch ARN) of the format latch://...")
 
