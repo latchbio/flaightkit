@@ -196,7 +196,7 @@ class FileAccessProvider(object):
         self._local = _local_file_proxy.LocalFileProxy(local_sandbox_dir_appended)
 
         # Remote/cloud stuff
-        self._latch = _latch_proxy.LatchProxy
+        self._latch = _latch_proxy.LatchProxy()
         if isinstance(remote_proxy, _s3proxy.AwsS3Proxy):
             self._aws = remote_proxy
         if isinstance(remote_proxy, _gcs_proxy.GCSProxy):
