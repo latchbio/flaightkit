@@ -324,6 +324,8 @@ class FileAccessProvider(object):
         """
         print("before inner download")
         print(self._get_data_proxy_by_path(remote_path))
+        print(remote_path)
+        print(local_path)
         return self._get_data_proxy_by_path(remote_path).download(remote_path, local_path)
 
     def upload(self, file_path: str, to_path: str):
