@@ -197,11 +197,12 @@ class FileAccessProvider(object):
 
         # Remote/cloud stuff
         self._latch = _latch_proxy.LatchProxy()
-        self._remote = self._latch
         if isinstance(remote_proxy, _s3proxy.AwsS3Proxy):
             self._aws = remote_proxy
-        elif isinstance(remote_proxy, _gcs_proxy.GCSProxy):
+        if isinstance(remote_proxy, _gcs_proxy.GCSProxy):
             self._gcs = remote_proxy
+        if remote_proxy is not None:
+            self._remote = remote_proxy
         else:
             mock_remote = os.path.join(local_sandbox_dir, "mock_remote")
             pathlib.Path(mock_remote).mkdir(parents=True, exist_ok=True)
@@ -332,7 +333,7 @@ class FileAccessProvider(object):
         :param Text file_path:
         :param Text to_path:
         """
-        return self.remote.upload(file_path, to_path)
+        return self._get_data_proxy_by_path(to_path).upload_directory(file_path, to_path)
 
     def upload_directory(self, local_path: str, remote_path: str):
         """
@@ -342,7 +343,7 @@ class FileAccessProvider(object):
         # TODO: Clean this up, this is a minor hack in lieu of https://github.com/flyteorg/flyte/issues/762
         if remote_path.startswith("/"):
             return self.local_access.upload_directory(local_path, remote_path)
-        return self.remote.upload_directory(local_path, remote_path)
+        return self._get_data_proxy_by_path(remote_path).upload_directory(local_path, remote_path)
 
     def get_data(self, remote_path: str, local_path: str, is_multipart=False):
         """
