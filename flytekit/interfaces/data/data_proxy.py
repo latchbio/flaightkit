@@ -322,10 +322,6 @@ class FileAccessProvider(object):
         :param Text remote_path: remote s3:// path
         :param Text local_path: directory to copy to
         """
-        print("before inner download")
-        print(self._get_data_proxy_by_path(remote_path))
-        print(remote_path)
-        print(local_path)
         return self._get_data_proxy_by_path(remote_path).download(remote_path, local_path)
 
     def upload(self, file_path: str, to_path: str):
@@ -351,12 +347,12 @@ class FileAccessProvider(object):
         :param Text local_path:
         :param bool is_multipart:
         """
+        print("get_data", local_path, remote_path, is_multipart)
         try:
             with _common_utils.PerformanceTimer("Copying ({} -> {})".format(remote_path, local_path)):
                 if is_multipart:
                     self.download_directory(remote_path, local_path)
                 else:
-                    print("before download")
                     self.download(remote_path, local_path)
         except Exception as ex:
             raise _user_exception.FlyteAssertion(
@@ -378,12 +374,13 @@ class FileAccessProvider(object):
         :param Text remote_path:
         :param bool is_multipart:
         """
+        print("put_data", local_path, remote_path, is_multipart)
         try:
             with _common_utils.PerformanceTimer("Writing ({} -> {})".format(local_path, remote_path)):
                 if is_multipart:
-                    self.remote.upload_directory(local_path, remote_path)
+                    self.upload_directory(local_path, remote_path)
                 else:
-                    self.remote.upload(local_path, remote_path)
+                    self.upload(local_path, remote_path)
         except Exception as ex:
             raise _user_exception.FlyteAssertion(
                 f"Failed to put data from {local_path} to {remote_path} (recursive={is_multipart}).\n\n"
