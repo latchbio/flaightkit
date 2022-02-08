@@ -197,12 +197,11 @@ class FileAccessProvider(object):
 
         # Remote/cloud stuff
         self._latch = _latch_proxy.LatchProxy()
+        self._remote = self._latch
         if isinstance(remote_proxy, _s3proxy.AwsS3Proxy):
             self._aws = remote_proxy
-        if isinstance(remote_proxy, _gcs_proxy.GCSProxy):
+        elif isinstance(remote_proxy, _gcs_proxy.GCSProxy):
             self._gcs = remote_proxy
-        if remote_proxy is not None:
-            self._remote = remote_proxy
         else:
             mock_remote = os.path.join(local_sandbox_dir, "mock_remote")
             pathlib.Path(mock_remote).mkdir(parents=True, exist_ok=True)
