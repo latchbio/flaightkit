@@ -34,14 +34,13 @@ class LatchProxy(_common_data.DataProxy):
         return self._raw_output_data_prefix_override
 
     @staticmethod
-    def _split_s3_path_to_bucket_and_key(path):
+    def _split_s3_path_to_bucket_and_key(path) -> str:
         """
         :param Text path:
         :rtype: (Text, Text)
         """
         path = path[len("latch://") :]
-        first_slash = path.index("/")
-        return path[:first_slash], path[first_slash + 1 :]
+        return path
 
     def exists(self, remote_path):
         """
@@ -69,13 +68,13 @@ class LatchProxy(_common_data.DataProxy):
         if not remote_path.startswith("latch://"):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format latch://...")
         
-        bucket, dir_key = self._split_s3_path_to_bucket_and_key(remote_path)
+        dir_key = self._split_s3_path_to_bucket_and_key(remote_path)
         dir_key = _enforce_trailing_slash(dir_key)
 
         r = requests.post(self._latch_endpoint + "/api/get-presigned-urls-for-dir", json={"object_url": remote_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to download `{}`".format(remote_path))
-        
+
         key_to_url_map = r.json()["key_to_url_map"]
         for key, url in key_to_url_map.items():
             local_file_path = _os.path.join(local_path, key.replace(dir_key, "", 1))
