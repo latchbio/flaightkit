@@ -62,22 +62,16 @@ class LatchProxy(_common_data.DataProxy):
         :param Text remote_path: remote latch:// path
         :param Text local_path: directory to copy to
         """
-        print("DOWNLOADING DIR FROM LATCH")
-        print(remote_path)
-        print(local_path)
         if not remote_path.startswith("latch://"):
             raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format latch://...")
         
         dir_key = self._split_s3_path_to_bucket_and_key(remote_path)
         dir_key = _enforce_trailing_slash(dir_key)
-        print(dir_key)
         r = requests.post(self._latch_endpoint + "/api/get-presigned-urls-for-dir", json={"object_url": remote_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to download `{}`".format(remote_path))
 
         key_to_url_map = r.json()["key_to_url_map"]
-        print(key_to_url_map)
-        print(dir_key)
         for key, url in key_to_url_map.items():
             local_file_path = _os.path.join(local_path, key.replace(dir_key, "", 1))
             dir = "/".join(local_file_path.split("/")[:-1])
@@ -91,10 +85,6 @@ class LatchProxy(_common_data.DataProxy):
         :param Text remote_path: remote latch:// path
         :param Text local_path: directory to copy to
         """
-        print("DOWNLOADING FILE FROM LATCH")
-        print(remote_path)
-        print(local_path)
-
         if not remote_path.startswith("latch://"):
             raise ValueError("Not a Latch ARN. Please use ARN of the format latch://...")
 
@@ -111,9 +101,6 @@ class LatchProxy(_common_data.DataProxy):
         :param Text file_path:
         :param Text to_path:
         """
-        print("UPLOADING FILE TO LATCH")
-        print(file_path)
-        print(to_path)
         file_size = _os.path.getsize(file_path)
         nrof_parts = math.ceil(float(file_size) / self._chunk_size)
         content_type = mimetypes.guess_type(file_path)[0]
@@ -147,9 +134,6 @@ class LatchProxy(_common_data.DataProxy):
         :param Text local_path:
         :param Text remote_path:
         """
-        print("UPLOADING DIR TO LATCH")
-        print(remote_path)
-        print(local_path)
         if not remote_path.startswith("latch://"):
             raise ValueError("Not a Latch ARN. Please use FQN (Latch ARN) of the format latch://...")
 

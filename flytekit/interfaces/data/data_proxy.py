@@ -347,7 +347,6 @@ class FileAccessProvider(object):
         :param Text local_path:
         :param bool is_multipart:
         """
-        print("get_data", local_path, remote_path, is_multipart)
         try:
             with _common_utils.PerformanceTimer("Copying ({} -> {})".format(remote_path, local_path)):
                 if is_multipart:
@@ -374,7 +373,6 @@ class FileAccessProvider(object):
         :param Text remote_path:
         :param bool is_multipart:
         """
-        print("put_data", local_path, remote_path, is_multipart)
         try:
             with _common_utils.PerformanceTimer("Writing ({} -> {})".format(local_path, remote_path)):
                 if is_multipart:
