@@ -1,7 +1,8 @@
 import os as _os
 import requests
 import mimetypes
-import urllib
+from urllib.parse import urlparse
+from urllib.request import urlretrieve
 import math
 
 from flytekit.common.exceptions.user import FlyteUserException as _FlyteUserException
@@ -34,22 +35,22 @@ class LatchProxy(_common_data.DataProxy):
         return self._raw_output_data_prefix_override
 
     @staticmethod
-    def _split_s3_path_to_bucket_and_key(path) -> str:
+    def _split_s3_path_to_key(path) -> str:
         """
         :param Text path:
         :rtype: (Text, Text)
         """
-        path = path[len("latch://") :]
-        return path
+        url = urlparse(path)
+        return url.path
 
     def exists(self, remote_path):
         """
-        :param Text remote_path: remote latch:// path
+        :param Text remote_path: remote latch:/// path
         :rtype bool: whether the s3 file exists or not
         """
 
-        if not remote_path.startswith("latch://"):
-            raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format latch://...")
+        if not remote_path.startswith("latch:///"):
+            raise ValueError("not a Latch URL. Please use URL of the format latch:///...")
 
         r = requests.post(self._latch_endpoint + "/api/object-exists-at-url", json={"object_url": remote_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
@@ -59,41 +60,41 @@ class LatchProxy(_common_data.DataProxy):
 
     def download_directory(self, remote_path, local_path):
         """
-        :param Text remote_path: remote latch:// path
+        :param Text remote_path: remote latch:/// path
         :param Text local_path: directory to copy to
         """
-        if not remote_path.startswith("latch://"):
-            raise ValueError("Not an S3 ARN. Please use FQN (S3 ARN) of the format latch://...")
+        if not remote_path.startswith("latch:///"):
+            raise ValueError("not a Latch URL. Please use URL of the format latch:///...")
         
-        dir_key = self._split_s3_path_to_bucket_and_key(remote_path)
-        dir_key = _enforce_trailing_slash(dir_key)
         r = requests.post(self._latch_endpoint + "/api/get-presigned-urls-for-dir", json={"object_url": remote_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to download `{}`".format(remote_path))
 
+        dir_key = self._split_s3_path_to_key(remote_path)[1:]
+        dir_key = _enforce_trailing_slash(dir_key)
         key_to_url_map = r.json()["key_to_url_map"]
         for key, url in key_to_url_map.items():
             local_file_path = _os.path.join(local_path, key.replace(dir_key, "", 1))
             dir = "/".join(local_file_path.split("/")[:-1])
             _os.makedirs(dir, exist_ok=True)
-            urllib.request.urlretrieve(url, local_file_path)
+            urlretrieve(url, local_file_path)
             assert _os.path.exists(local_file_path)
         return True
 
     def download(self, remote_path, local_path):
         """
-        :param Text remote_path: remote latch:// path
+        :param Text remote_path: remote latch:/// path
         :param Text local_path: directory to copy to
         """
-        if not remote_path.startswith("latch://"):
-            raise ValueError("Not a Latch ARN. Please use ARN of the format latch://...")
+        if not remote_path.startswith("latch:///"):
+            raise ValueError("not a Latch URL. Please use URL of the format latch:///...")
 
         r = requests.post(self._latch_endpoint + "/api/get-presigned-url", json={"object_url": remote_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to get presigned url for `{}`".format(remote_path))
         
         url = r.json()["url"]
-        urllib.request.urlretrieve(url, local_path)
+        urlretrieve(url, local_path)
         return _os.path.exists(local_path)
 
     def upload(self, file_path, to_path):
@@ -134,8 +135,8 @@ class LatchProxy(_common_data.DataProxy):
         :param Text local_path:
         :param Text remote_path:
         """
-        if not remote_path.startswith("latch://"):
-            raise ValueError("Not a Latch ARN. Please use FQN (Latch ARN) of the format latch://...")
+        if not remote_path.startswith("latch:///"):
+            raise ValueError("not a Latch URL. Please use URL of the format latch:///...")
 
         # ensure formatting
         local_path = _enforce_trailing_slash(local_path)
