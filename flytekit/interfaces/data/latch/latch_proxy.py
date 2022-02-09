@@ -70,12 +70,14 @@ class LatchProxy(_common_data.DataProxy):
         
         dir_key = self._split_s3_path_to_bucket_and_key(remote_path)
         dir_key = _enforce_trailing_slash(dir_key)
-
+        print(dir_key)
         r = requests.post(self._latch_endpoint + "/api/get-presigned-urls-for-dir", json={"object_url": remote_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to download `{}`".format(remote_path))
 
         key_to_url_map = r.json()["key_to_url_map"]
+        print(key_to_url_map)
+        print(dir_key)
         for key, url in key_to_url_map.items():
             local_file_path = _os.path.join(local_path, key.replace(dir_key, "", 1))
             dir = "/".join(local_file_path.split("/")[:-1])
