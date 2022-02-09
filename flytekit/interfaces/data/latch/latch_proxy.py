@@ -63,6 +63,7 @@ class LatchProxy(_common_data.DataProxy):
         :param Text remote_path: remote latch:// path
         :param Text local_path: directory to copy to
         """
+        print("DOWNLOADING DIR FROM LATCH")
         print(remote_path)
         print(local_path)
         if not remote_path.startswith("latch://"):
@@ -89,6 +90,7 @@ class LatchProxy(_common_data.DataProxy):
         :param Text remote_path: remote latch:// path
         :param Text local_path: directory to copy to
         """
+        print("DOWNLOADING FILE FROM LATCH")
         print(remote_path)
         print(local_path)
 
@@ -108,6 +110,7 @@ class LatchProxy(_common_data.DataProxy):
         :param Text file_path:
         :param Text to_path:
         """
+        print("UPLOADING FILE TO LATCH")
         print(file_path)
         print(to_path)
         file_size = _os.path.getsize(file_path)
@@ -143,6 +146,7 @@ class LatchProxy(_common_data.DataProxy):
         :param Text local_path:
         :param Text remote_path:
         """
+        print("UPLOADING DIR TO LATCH")
         print(remote_path)
         print(local_path)
         if not remote_path.startswith("latch://"):
