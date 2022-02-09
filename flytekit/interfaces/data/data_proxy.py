@@ -329,7 +329,7 @@ class FileAccessProvider(object):
         :param Text file_path:
         :param Text to_path:
         """
-        return self._get_data_proxy_by_path(to_path).upload_directory(file_path, to_path)
+        return self._get_data_proxy_by_path(to_path).upload(file_path, to_path)
 
     def upload_directory(self, local_path: str, remote_path: str):
         """
