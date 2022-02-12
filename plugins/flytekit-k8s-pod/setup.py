@@ -1,14 +1,12 @@
 from setuptools import setup
 
-PLUGIN_NAME = "pod"
-
-microlib_name = f"flytekitplugins-{PLUGIN_NAME}"
+microlib_name = "flaightkitplugins-pod"
 
 plugin_requires = [
     "kubernetes>=12.0.1",
 ]
 
-__version__ = "0.0.0+develop"
+__version__ = "0.0.1"
 
 setup(
     name=microlib_name,
@@ -17,7 +15,7 @@ setup(
     author_email="admin@flyte.org",
     description="Flytekit plugin to support K8s Pod tasks",
     namespace_packages=["flytekitplugins"],
-    packages=[f"flytekitplugins.{PLUGIN_NAME}"],
+    packages=["flytekitplugins.pod"],
     install_requires=plugin_requires,
     license="apache2",
     python_requires=">=3.7",
