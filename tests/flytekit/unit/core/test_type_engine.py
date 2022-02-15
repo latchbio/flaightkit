@@ -404,4 +404,3 @@ def test_optional_file():
 
     pv = TypeEngine.to_python_value(ctx, lv, expected_python_type=typing.Optional[FlyteFile])
     assert pv is None
-    assert False
