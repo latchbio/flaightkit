@@ -254,7 +254,6 @@ class FlyteFilePathTransformer(TypeTransformer[FlyteFile]):
     def to_python_value(
         self, ctx: FlyteContext, lv: Literal, expected_python_type: typing.Type[FlyteFile]
     ) -> FlyteFile:
-
         uri = lv.scalar.blob.uri
 
         # This is a local file path, like /usr/local/my_file, don't mess with it. Certainly, downloading it doesn't
