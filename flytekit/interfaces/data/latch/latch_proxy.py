@@ -37,20 +37,20 @@ class LatchProxy(_common_data.DataProxy):
     @staticmethod
     def _split_s3_path_to_key(path) -> str:
         """
-        :param Text path:
-        :rtype: (Text, Text)
+        :param str path:
+        :rtype: str
         """
         url = urlparse(path)
         return url.path
 
     def exists(self, remote_path):
         """
-        :param Text remote_path: remote latch:/// path
+        :param str remote_path: remote latch:/// path
         :rtype bool: whether the s3 file exists or not
         """
 
         if not remote_path.startswith("latch:///"):
-            raise ValueError("not a Latch URL. Please use URL of the format latch:///...")
+            raise ValueError(f"expected a Latch URL (latch:///...): {remote_path}")
 
         r = requests.post(self._latch_endpoint + "/api/object-exists-at-url", json={"object_url": remote_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
@@ -60,11 +60,11 @@ class LatchProxy(_common_data.DataProxy):
 
     def download_directory(self, remote_path, local_path):
         """
-        :param Text remote_path: remote latch:/// path
-        :param Text local_path: directory to copy to
+        :param str remote_path: remote latch:/// path
+        :param str local_path: directory to copy to
         """
         if not remote_path.startswith("latch:///"):
-            raise ValueError("not a Latch URL. Please use URL of the format latch:///...")
+            raise ValueError(f"expected a Latch URL (latch:///...): {remote_path}")
         
         r = requests.post(self._latch_endpoint + "/api/get-presigned-urls-for-dir", json={"object_url": remote_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
@@ -83,11 +83,11 @@ class LatchProxy(_common_data.DataProxy):
 
     def download(self, remote_path, local_path):
         """
-        :param Text remote_path: remote latch:/// path
-        :param Text local_path: directory to copy to
+        :param str remote_path: remote latch:/// path
+        :param str local_path: directory to copy to
         """
         if not remote_path.startswith("latch:///"):
-            raise ValueError("not a Latch URL. Please use URL of the format latch:///...")
+            raise ValueError(f"expected a Latch URL (latch:///...): {remote_path}")
 
         r = requests.post(self._latch_endpoint + "/api/get-presigned-url", json={"object_url": remote_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
@@ -99,8 +99,8 @@ class LatchProxy(_common_data.DataProxy):
 
     def upload(self, file_path, to_path):
         """
-        :param Text file_path:
-        :param Text to_path:
+        :param str file_path:
+        :param str to_path:
         """
         file_size = _os.path.getsize(file_path)
         nrof_parts = math.ceil(float(file_size) / self._chunk_size)
@@ -132,11 +132,11 @@ class LatchProxy(_common_data.DataProxy):
 
     def upload_directory(self, local_path, remote_path):
         """
-        :param Text local_path:
-        :param Text remote_path:
+        :param str local_path:
+        :param str remote_path:
         """
         if not remote_path.startswith("latch:///"):
-            raise ValueError("not a Latch URL. Please use URL of the format latch:///...")
+            raise ValueError(f"expected a Latch URL (latch:///...): {remote_path}")
 
         # ensure formatting
         local_path = _enforce_trailing_slash(local_path)
