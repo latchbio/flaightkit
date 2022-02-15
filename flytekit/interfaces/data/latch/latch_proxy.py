@@ -25,7 +25,7 @@ class LatchProxy(_common_data.DataProxy):
         self._raw_output_data_prefix_override = raw_output_data_prefix_override
         self._latch_endpoint = _latch_config.LATCH_AUTHENTICATION_ENDPOINT.get()
         if self._latch_endpoint is None:
-            raise ValueError("S3_LATCH_AUTHENTICATION_ENDPOINT must be set")
+            raise ValueError("LATCH_AUTHENTICATION_ENDPOINT must be set")
         self._chunk_size = _latch_config.LATCH_UPLOAD_CHUNK_SIZE_BYTES.get()
         if self._chunk_size is None:
             raise ValueError("S3_UPLOAD_CHUNK_SIZE_BYTES must be set")
@@ -147,5 +147,6 @@ class LatchProxy(_common_data.DataProxy):
             relative_name = file_path.replace(local_path, "", 1)
             if relative_name.startswith("/"):
                 relative_name = relative_name[1:]
+            # TODO(aidan): change this to form data (all at once)
             self.upload(file_path, remote_path + relative_name)
         return True
