@@ -144,6 +144,8 @@ class LatchProxy(_common_data.DataProxy):
         # ensure formatting
         local_path = _enforce_trailing_slash(local_path)
         remote_path = _enforce_trailing_slash(remote_path)
+        print(remote_path)
+        print(local_path)
 
         files_to_upload = [_os.path.join(dp, f) for dp, __, filenames in _os.walk(local_path) for f in filenames]
         for file_path in files_to_upload:
