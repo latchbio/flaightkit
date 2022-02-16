@@ -90,8 +90,7 @@ class LatchProxy(_common_data.DataProxy):
             raise ValueError(f"expected a Latch URL (latch:///...): {remote_path}")
 
         r = requests.post(self._latch_endpoint + "/api/get-presigned-url", json={"object_url": remote_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
-        print(r.status_code)
-        print(r.json())
+        print(self._latch_endpoint)
         if r.status_code != 200:
             raise _FlyteUserException("failed to get presigned url for `{}`".format(remote_path))
         
