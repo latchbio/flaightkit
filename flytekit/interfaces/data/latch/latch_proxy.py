@@ -23,7 +23,9 @@ class LatchProxy(_common_data.DataProxy):
             path passed in is correct. That is, an S3 path won't be passed in when running on GCP.
         """
         self._raw_output_data_prefix_override = raw_output_data_prefix_override
-        self._latch_endpoint = _latch_config.LATCH_AUTHENTICATION_ENDPOINT.get()
+        self._latch_endpoint = _os.environ.get("LATCH_AUTHENTICATION_ENDPOINT")
+        if self._latch_endpoint is None:
+            self._latch_endpoint = _latch_config.LATCH_AUTHENTICATION_ENDPOINT.get()
         if self._latch_endpoint is None:
             raise ValueError("LATCH_AUTHENTICATION_ENDPOINT must be set")
         self._chunk_size = _latch_config.LATCH_UPLOAD_CHUNK_SIZE_BYTES.get()
