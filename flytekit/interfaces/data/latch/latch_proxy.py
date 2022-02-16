@@ -138,14 +138,14 @@ class LatchProxy(_common_data.DataProxy):
         :param str local_path:
         :param str remote_path:
         """
+        if remote_path == "latch://":
+            remote_path = "latch:///"
         if not remote_path.startswith("latch:///"):
             raise ValueError(f"expected a Latch URL (latch:///...): {remote_path}")
 
         # ensure formatting
         local_path = _enforce_trailing_slash(local_path)
         remote_path = _enforce_trailing_slash(remote_path)
-        print(remote_path)
-        print(local_path)
 
         files_to_upload = [_os.path.join(dp, f) for dp, __, filenames in _os.walk(local_path) for f in filenames]
         for file_path in files_to_upload:
