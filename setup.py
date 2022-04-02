@@ -82,7 +82,7 @@ setup(
         "requests>=2.18.4,<3.0.0",
         "responses>=0.10.7",
         "six>=1.9.0,<2.0.0",
-        "sortedcontainers>=1.5.9<3.0.0",
+        "sortedcontainers>=1.5.9,<3.0.0",
         "statsd>=3.0.0,<4.0.0",
         "urllib3>=1.22,<2.0.0",
         "wrapt>=1.0.0,<2.0.0",
