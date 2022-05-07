@@ -120,7 +120,7 @@ class PodFunctionTask(PythonFunctionTask[Pod]):
         return {_PRIMARY_CONTAINER_NAME_FIELD: self.task_config.primary_container_name}
 
     def local_execute(self, ctx: FlyteContext, **kwargs) -> Union[Tuple[Promise], Promise, None]:
-        raise _user_exceptions.FlyteUserException("Local execute is not currently supported for pod tasks")
+        return super().local_execute(ctx=ctx, **kwargs)
 
 
 TaskPlugins.register_pythontask_plugin(Pod, PodFunctionTask)
