@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import typing
 
-from flytekit.core.context_manager import FlyteContext
+from flytekit.core.context_manager import ExecutionState, FlyteContext
 from flytekit.core.type_engine import TypeEngine, TypeTransformer
 from flytekit.models import types as _type_models
 from flytekit.models.core import types as _core_types
@@ -236,8 +236,13 @@ class FlyteFilePathTransformer(TypeTransformer[FlyteFile]):
             source_path = python_val
 
         # For remote values, say https://raw.github.com/demo_data.csv, we will not upload to Flyte's store (S3/GCS)
-        # and just return a literal with a uri equal to the path given
-        if ctx.file_access.is_remote(source_path) or not should_upload:
+        # and just return a literal with a uri equal to the path given. We also
+        # avoid uploading in a local execution context.
+        if (
+            ctx.file_access.is_remote(source_path)
+            or not should_upload
+            or ctx.execution_state.mode == ExecutionState.Mode.LOCAL_WORKFLOW_EXECUTION
+        ):
             # TODO: Add copying functionality so that FlyteFile(path="s3://a", remote_path="s3://b") will copy.
             meta = BlobMetadata(type=self._blob_type(format=FlyteFilePathTransformer.get_format(python_type)))
             return Literal(scalar=Scalar(blob=Blob(metadata=meta, uri=source_path)))
