@@ -58,7 +58,6 @@ class Worker(Thread):
 
 def get(args):
     urlretrieve(args[0], args[1])
-    print(f"succ: {args[1]}", flush=True)
 
 def _enforce_trailing_slash(path: str):
     if path[-1] != "/":
