@@ -132,7 +132,7 @@ class LatchProxy(_common_data.DataProxy):
             _os.makedirs(dir, exist_ok=True)
             task_tuples.append((url, local_file_path))
 
-        pool = ThreadPool(40)
+        pool = ThreadPool(100)
         pool.map(get, task_tuples)
         pool.wait_completion()
         return True
