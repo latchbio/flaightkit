@@ -79,6 +79,7 @@ class LatchProxy(_common_data.DataProxy):
             local_file_path = _os.path.join(local_path, key.replace(dir_key, "", 1))
             dir = "/".join(local_file_path.split("/")[:-1])
             _os.makedirs(dir, exist_ok=True)
+            print("Fetching {}".format(local_file_path), flush=True)
             urlretrieve(url, local_file_path)
             assert _os.path.exists(local_file_path)
         return True
