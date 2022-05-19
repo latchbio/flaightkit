@@ -56,8 +56,8 @@ class Worker(Thread):
                 # Mark this task as done, whether an exception happened or not
                 self.tasks.task_done()
 
-def get(url, local_file_path):
-    urlretrieve(url, local_file_path)
+def get(args):
+    urlretrieve(args[0], args[1])
 
 def _enforce_trailing_slash(path: str):
     if path[-1] != "/":
