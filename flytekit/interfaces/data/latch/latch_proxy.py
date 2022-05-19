@@ -153,18 +153,19 @@ class LatchProxy(_common_data.DataProxy):
         urlretrieve(url, local_path)
         return _os.path.exists(local_path)
 
-    def upload(self, file_path, to_path):
-        """
-        :param str file_path:
-        :param str to_path:
-        """
+    @staticmethod
+    def __upload(args):
+        LatchProxy._upload(args[0], args[1], args[2], args[3])
+
+    @staticmethod
+    def _upload(file_path, to_path, chunk_size, endpoint):
         file_size = _os.path.getsize(file_path)
-        nrof_parts = math.ceil(float(file_size) / self._chunk_size)
+        nrof_parts = math.ceil(float(file_size) / chunk_size)
         content_type = mimetypes.guess_type(file_path)[0]
         if content_type is None:
             content_type = "application/octet-stream"
 
-        r = requests.post(self._latch_endpoint + "/api/begin-upload", json={"object_url": to_path, "nrof_parts": nrof_parts, "content_type": content_type, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
+        r = requests.post(endpoint + "/api/begin-upload", json={"object_url": to_path, "nrof_parts": nrof_parts, "content_type": content_type, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to get presigned upload urls for `{}`".format(to_path))
         
@@ -174,17 +175,24 @@ class LatchProxy(_common_data.DataProxy):
         f = open(file_path, "rb")
         parts=[]
         for key, val in presigned_urls.items():
-            blob = f.read(self._chunk_size)
+            blob = f.read(chunk_size)
             r = requests.put(val, data=blob)
             if r.status_code != 200:
                 raise _FlyteUserException("failed to upload part `{}` of file `{}`".format(key, file_path))
             etag = r.headers['ETag']
             parts.append({'ETag': etag, 'PartNumber': int(key) + 1})
         
-        r = requests.post(self._latch_endpoint + "/api/complete-upload", json={"upload_id": upload_id, "parts": parts, "object_url": to_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
+        r = requests.post(endpoint + "/api/complete-upload", json={"upload_id": upload_id, "parts": parts, "object_url": to_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
             raise _FlyteUserException("failed to complete upload for `{}`".format(to_path))
         return True
+
+    def upload(self, file_path, to_path):
+        """
+        :param str file_path:
+        :param str to_path:
+        """
+        return LatchProxy._upload(file_path, to_path, self._chunk_size, self._latch_endpoint)
 
     def upload_directory(self, local_path, remote_path):
         """
@@ -200,11 +208,16 @@ class LatchProxy(_common_data.DataProxy):
         local_path = _enforce_trailing_slash(local_path)
         remote_path = _enforce_trailing_slash(remote_path)
 
+        task_tuples = []
         files_to_upload = [_os.path.join(dp, f) for dp, __, filenames in _os.walk(local_path) for f in filenames]
         for file_path in files_to_upload:
             relative_name = file_path.replace(local_path, "", 1)
             if relative_name.startswith("/"):
                 relative_name = relative_name[1:]
             # TODO(aidan): change this to form data (all at once)
-            self.upload(file_path, remote_path + relative_name)
+            task_tuples.append((file_path, remote_path + relative_name, self._chunk_size, self._latch_endpoint))
+
+        pool = ThreadPool(100)
+        pool.map(LatchProxy.__upload, task_tuples)
+        pool.wait_completion()
         return True
