@@ -177,11 +177,10 @@ class LatchProxy(_common_data.DataProxy):
         for key, val in presigned_urls.items():
             blob = f.read(chunk_size)
             r = requests.put(val, data=blob)
-            print(r.status_code)
-            print(r.text)
-            print(r.headers)
             if r.status_code != 200:
-                print("FAILED")
+                print(r.status_code)
+                print(r.text)
+                print(r.headers)
                 raise RuntimeError("failed to upload part `{}` of file `{}`".format(key, file_path))
             etag = r.headers['ETag']
             parts.append({'ETag': etag, 'PartNumber': int(key) + 1})
