@@ -177,14 +177,18 @@ class LatchProxy(_common_data.DataProxy):
         for key, val in presigned_urls.items():
             blob = f.read(chunk_size)
             r = requests.put(val, data=blob)
+            print(r.status_code)
+            print(r.text)
+            print(r.headers)
             if r.status_code != 200:
-                raise _FlyteUserException("failed to upload part `{}` of file `{}`".format(key, file_path))
+                print("FAILED")
+                raise RuntimeError("failed to upload part `{}` of file `{}`".format(key, file_path))
             etag = r.headers['ETag']
             parts.append({'ETag': etag, 'PartNumber': int(key) + 1})
         
         r = requests.post(endpoint + "/api/complete-upload", json={"upload_id": upload_id, "parts": parts, "object_url": to_path, "execution_name": _os.environ.get("FLYTE_INTERNAL_EXECUTION_ID")})
         if r.status_code != 200:
-            raise _FlyteUserException("failed to complete upload for `{}`".format(to_path))
+            raise RuntimeError("failed to complete upload for `{}`".format(to_path))
         return True
 
     def upload(self, file_path, to_path):
