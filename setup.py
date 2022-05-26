@@ -24,7 +24,7 @@ elif CURRENT_PYTHON < MIN_PYTHON_VERSION:
 spark = ["pyspark>=2.4.0,<3.0.0"]
 spark3 = ["pyspark>=3.0.0"]
 sidecar = ["k8s-proto>=0.0.3,<1.0.0"]
-schema = ["numpy>=1.14.0,<2.0.0", "pandas>=0.22.0,<2.0.0", "pyarrow>2.0.0,<4.0.0"]
+schema = ["numpy>=1.14.0,<2.0.0", "pandas>=0.22.0,<2.0.0"]
 hive_sensor = ["hmsclient>=0.0.1,<1.0.0"]
 notebook = ["papermill>=1.2.0", "nbconvert>=6.0.7", "ipykernel>=5.0.0,<6.0.0"]
 sagemaker = ["sagemaker-training>=3.6.2,<4.0.0"]
@@ -68,7 +68,6 @@ setup(
         "flaightidl==0.1.1",
         "wheel>=0.30.0,<1.0.0",
         "pandas>=1.0.0,<1.4.0",
-        "pyarrow>=2.0.0,<4.0.0",
         "click>=6.6,<8.0",
         "croniter>=0.3.20,<4.0.0",
         "deprecated>=1.0,<2.0",
